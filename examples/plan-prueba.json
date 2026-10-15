@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "planId": "prueba-formato",
+  "titulo": "[PRUEBA] Ejemplo de formato, NO es el calendario real",
+  "origen": { "etiqueta": "prueba" },
+  "completo": false,
+  "sesiones": [
+    { "id": "prueba-001", "fecha": "2026-10-15", "materiaId": "algebra", "titulo": "[PRUEBA] Sesión de ejemplo", "tema": "Tema de ejemplo", "objetivo": "Objetivo de ejemplo verificable", "minutos": 60, "orden": 1 },
+    { "id": "prueba-002", "fecha": "2026-10-15", "materiaId": "requisitos", "titulo": "[PRUEBA] Otra sesión de ejemplo", "tema": "Tema de ejemplo", "objetivo": "Objetivo de ejemplo verificable", "minutos": 30, "orden": 2 }
+  ]
+}

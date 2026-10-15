@@ -40,6 +40,10 @@ code { font-size: 0.9em; background: oklch(0.96 0.005 260); padding: 0.1em 0.35e
 .sf-badge { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 10px; background: oklch(0.95 0.02 265); color: var(--sf-algebra); }
 .sf-field { display: flex; flex-direction: column; gap: 0.4rem; }
 .input { border: 1px solid var(--sf-line); min-height: 2.5rem; padding: 0 0.75rem; }
+.sf-password { position: relative; display: flex; }
+.sf-password .input { padding-right: 2.75rem; }
+.sf-reveal { position: absolute; top: 0; right: 0; bottom: 0; width: 2.75rem; display: grid; place-items: center; background: none; border: 0; color: var(--sf-muted); cursor: pointer; }
+.sf-reveal:hover { color: inherit; }
 .sf-error { color: oklch(0.5 0.2 25); font-size: 0.9rem; }
 
 /* Estructura general */
@@ -112,3 +116,19 @@ code { font-size: 0.9em; background: oklch(0.96 0.005 260); padding: 0.1em 0.35e
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* Fase 2: sesiones, importacion y datos */
+.sf-sessions { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+.sf-session { border: 1px solid oklch(0.9 0.005 260); border-radius: 0.75rem; padding: 0.75rem 1rem; display: grid; gap: 0.25rem; }
+.sf-session p { margin: 0; }
+.sf-session__head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.sf-session__title { font-weight: 600; }
+.sf-summary { font-size: 1.1rem; font-weight: 600; margin: 0; }
+.sf-day__load { font-weight: 600; }
+.sf-file { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.sf-file:focus-visible { outline: 2px solid currentColor; }
+.sf-filebtn { cursor: pointer; width: fit-content; }
+.sf-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.sf-issues { padding-left: 1.1rem; }
+.sf-issues--error li { color: oklch(0.5 0.2 25); }
+.sf-issues--aviso li { color: oklch(0.45 0.1 70); }

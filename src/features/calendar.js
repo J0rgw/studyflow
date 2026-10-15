@@ -4,6 +4,8 @@ import {
   cuadriculaMes, nombreMes, formatoLargo, formatoMinutos, sumarMeses,
 } from '../lib/dates.js';
 import { MATERIAS, restriccionesDia, materiaPorId } from '../data/control.js';
+import { sesionesDelDia, minutosDelDia } from '../data/sesiones.js';
+import { tarjetaSesion } from './today.js';
 
 const DIAS = [['L', 'lunes'], ['M', 'martes'], ['X', 'miércoles'], ['J', 'jueves'], ['V', 'viernes'], ['S', 'sábado'], ['D', 'domingo']];
 
@@ -16,7 +18,8 @@ export function descripcionDia(iso) {
   return partes.join(', ');
 }
 
-function celda(dia, { seleccionado, hoy }, onSelect) {
+function celda(dia, { seleccionado, hoy, sesiones }, onSelect) {
+  const carga = minutosDelDia(sesiones, dia.iso);
   const r = restriccionesDia(dia.iso);
   const clases = ['sf-day'];
   if (!dia.delMes) clases.push('sf-day--fuera');
@@ -26,7 +29,7 @@ function celda(dia, { seleccionado, hoy }, onSelect) {
   if (dia.iso === hoy) clases.push('sf-day--hoy');
   return h('td', {},
     h('button', {
-      type: 'button', class: clases.join(' '), 'aria-label': descripcionDia(dia.iso),
+      type: 'button', class: clases.join(' '), 'aria-label': descripcionDia(dia.iso) + (carga > 0 ? `, ${formatoMinutos(carga)} previstos` : ''),
       'aria-pressed': dia.iso === seleccionado ? 'true' : 'false',
       'aria-current': dia.iso === hoy ? 'date' : null,
       onClick: () => onSelect(dia.iso),
@@ -34,14 +37,16 @@ function celda(dia, { seleccionado, hoy }, onSelect) {
       h('span', { class: 'sf-day__num' }, dia.dia),
       r.bloqueado && h('span', { class: 'sf-day__tag' }, 'Bloqueado'),
       !r.bloqueado && r.maxMin != null && h('span', { class: 'sf-day__tag' }, `máx. ${formatoMinutos(r.maxMin)}`),
+      carga > 0 && h('span', { class: 'sf-day__tag sf-day__load' }, formatoMinutos(carga)),
       r.examenes.length > 0 && h('span', { class: 'sf-day__exams' },
         r.examenes.map((e) => h('span', { class: `sf-dot sf-subject-${e.materiaId}`, title: `Examen ${materiaPorId(e.materiaId).corto}` })),
         h('span', { class: 'sf-day__tag' }, 'Examen')),
     ));
 }
 
-function panelDia(iso) {
+function panelDia(iso, datos) {
   const r = restriccionesDia(iso);
+  const delDia = sesionesDelDia(datos.sesiones, iso);
   return h('section', { class: 'card', 'aria-labelledby': 'cal-dia', 'aria-live': 'polite' },
     h('div', { class: 'card__header' }, h('h2', { id: 'cal-dia', class: 'card__title' }, formatoLargo(iso))),
     h('div', { class: 'card__content sf-stack' },
@@ -57,10 +62,16 @@ function panelDia(iso) {
         h('p', { class: 'sf-muted' }, 'Las horas de examen no se cuentan como tiempo estudiado.')),
       h('div', { class: 'sf-stack-sm' },
         h('h3', {}, 'Sesiones'),
-        h('p', { class: 'sf-muted' }, 'Sin sesiones: el calendario maestro todavía no está importado (fase 2). No se inventan sesiones ni horas de comienzo.'))));
+        datos.status === 'error' && h('p', { class: 'sf-error', role: 'alert' }, datos.error),
+        (datos.status === 'idle' || datos.status === 'loading') && h('p', { class: 'sf-muted', role: 'status' }, 'Cargando sesiones…'),
+        datos.status === 'ready' && delDia.length > 0 && h('ul', { class: 'sf-sessions' }, delDia.map(tarjetaSesion)),
+        datos.status === 'ready' && delDia.length === 0 && h('p', { class: 'sf-muted' },
+          datos.sesiones.length === 0
+            ? 'Sin sesiones: aún no hay un plan importado. No se inventan sesiones ni horas de comienzo.'
+            : 'No hay sesiones planificadas este día.'))));
 }
 
-export function vistaCalendario({ mes, seleccionado, hoy, onSelect, onMes }) {
+export function vistaCalendario({ mes, seleccionado, hoy, datos, onSelect, onMes }) {
   const semanas = cuadriculaMes(mes.y, mes.m);
   const ant = sumarMeses(mes.y, mes.m, -1);
   const sig = sumarMeses(mes.y, mes.m, 1);
@@ -74,10 +85,10 @@ export function vistaCalendario({ mes, seleccionado, hoy, onSelect, onMes }) {
           h('button', { type: 'button', class: 'button button--ghost button--icon-only', 'aria-label': 'Mes siguiente', onClick: () => onMes(sig) }, icono(ChevronRight))),
         h('table', { class: 'sf-cal' },
           h('thead', {}, h('tr', {}, DIAS.map(([c, n]) => h('th', { scope: 'col' }, h('abbr', { title: n }, c))))),
-          h('tbody', {}, semanas.map((s) => h('tr', {}, s.map((d) => celda(d, { seleccionado, hoy }, onSelect)))))),
+          h('tbody', {}, semanas.map((s) => h('tr', {}, s.map((d) => celda(d, { seleccionado, hoy, sesiones: datos.sesiones }, onSelect)))))),
         h('ul', { class: 'sf-legend' },
           MATERIAS.map((m) => h('li', {}, h('span', { class: `sf-dot sf-subject-${m.id}`, 'aria-hidden': 'true' }), m.corto)),
           h('li', {}, h('span', { class: 'sf-swatch sf-swatch--bloqueado', 'aria-hidden': 'true' }), 'Bloqueado'),
           h('li', {}, h('span', { class: 'sf-swatch sf-swatch--periodo', 'aria-hidden': 'true' }), 'Periodo de estudio'))),
-      panelDia(seleccionado)));
+      panelDia(seleccionado, datos)));
 }

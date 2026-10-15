@@ -1,4 +1,4 @@
-import { Lock, Warning, Key } from '../lib/icons.js';
+import { Lock, Warning, Key, Eye, EyeOff } from '../lib/icons.js';
 import { h, icono } from '../lib/dom.js';
 
 export function vistaConfigPendiente(missing) {
@@ -41,6 +41,17 @@ export function vistaLogin(state, { onLogin }) {
     'aria-describedby': state.error ? 'login-error' : null,
     'aria-invalid': state.error ? 'true' : null,
   });
+  const boton = h('button', {
+    class: 'sf-reveal', type: 'button', 'aria-label': 'Mostrar contraseña', 'aria-pressed': 'false', disabled: cargando,
+    onClick: () => {
+      const visible = campo.type === 'password';
+      campo.type = visible ? 'text' : 'password';
+      boton.setAttribute('aria-pressed', String(visible));
+      boton.setAttribute('aria-label', visible ? 'Ocultar contraseña' : 'Mostrar contraseña');
+      boton.replaceChildren(icono(visible ? EyeOff : Eye));
+      campo.focus();
+    },
+  }, icono(Eye));
   const form = h('form', {
     class: 'sf-stack', novalidate: true,
     onSubmit: (e) => {
@@ -52,7 +63,7 @@ export function vistaLogin(state, { onLogin }) {
   },
     h('div', { class: 'sf-field' },
       h('label', { class: 'label', for: 'password' }, 'Contraseña'),
-      campo,
+      h('div', { class: 'sf-password' }, campo, boton),
     ),
     state.error && h('p', { id: 'login-error', class: 'sf-error', role: 'alert' }, state.error),
     h('button', { class: 'button button--primary button--full-width', type: 'submit', disabled: cargando },

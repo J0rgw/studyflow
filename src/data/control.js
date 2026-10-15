@@ -48,3 +48,11 @@ export function restriccionesDia(iso) {
 export function proximoExamen(fecha, hora) {
   return EXAMENES.find((e) => e.fecha > fecha || (e.fecha === fecha && e.fin > hora)) ?? null;
 }
+
+// Reparto diario verificado en CONTEXT.md (minutos por materia). Solo sirve para
+// COMPROBAR un plan importado; nunca para generar sesiones.
+export const REFERENCIAS_DIA = Object.freeze({
+  '2026-10-23': { algebra: 150, requisitos: 120, tac: 30 },
+  '2026-10-27': { tac: 120 },
+  '2026-11-06': { algebra: 90, requisitos: 90, tac: 30, moviles: 30 },
+});

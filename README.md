@@ -23,7 +23,7 @@ GitHub Pages no ejecuta una base de datos ni valida contraseñas. Una contraseñ
 - `prompts/00_PROMPT_INICIAL.md`: instrucción inicial para Codex.
 - `prompts/01_...` a `05_...`: fases.
 
-## Desarrollo (fase 1)
+## Desarrollo (fases 1 y 2)
 
 ```bash
 npm install
@@ -31,6 +31,7 @@ cp .env.example .env.local   # rellenar con la config cliente de Firebase
 npm run dev                  # desarrollo
 npm test                     # pruebas (sin credenciales)
 npm run build                # genera dist/ estatico
+npm run test:rules           # reglas Firestore contra el emulador (requiere Java)
 npm run rules:check          # falla si firestore.rules conserva REEMPLAZAR_UID_PROPIETARIO
 ```
 
@@ -41,3 +42,12 @@ Notas:
 - HeroUI Styles 3 (clases CSS sobre Tailwind 4) y Reicon (SVG vanilla, importados icono a icono) funcionan sin React.
 - `npm audit` senala `@grpc/grpc-js` dentro de Firestore: es la ruta de Node, no se incluye en el bundle del navegador.
 - La base de Vite es relativa (`./`) y la navegacion usa hash, validos en cualquier subruta de Pages.
+
+## Importacion de planes (fase 2)
+
+Vista **Datos**: elegir un JSON `schemaVersion 1` (ejemplo etiquetado como prueba en `examples/plan-prueba.json`), revisar errores/avisos y cambios, y confirmar. Campos de sesion: `id`, `fecha`, `materiaId`, `titulo`, `tema`, `objetivo`, `minutos`, `orden`; sin hora de inicio. Plan con `completo: true` debe sumar exactamente 104 h (y cuadrar las referencias de 23/10, 27/10 y 06/11) o la importacion se bloquea; `completo: false` es un plan parcial que solo avisa.
+
+- Idempotente: IDs estables, solo se escriben sesiones nuevas o cambiadas, en lotes de 400 y el documento del plan al final. Las sesiones guardadas que ya no estan en el archivo se conservan.
+- Las sesiones guardan solo datos del plan; el progreso (logs, estados) vive en otras colecciones y no se toca.
+- Copia de seguridad: boton «Descargar copia JSON» en Datos (se genera en el navegador). No subirla a un repositorio publico.
+- `source-plans/` sigue sin existir: no hay calendario real. Hay que convertir el plan maestro a este JSON y validarlo; la app no inventa sesiones.

@@ -13,8 +13,15 @@ function valorValido(v) {
   return typeof v === 'string' && v.trim() !== '' && !v.trim().startsWith('REEMPLAZAR');
 }
 
-/** @param {Record<string, string|undefined>} env */
-export function readConfig(env) {
+// Pegar un valor en GitHub o en .env puede dejar espacios o un salto de linea
+// (\r\n) al final; en la API key eso produce un 400 enganoso de Firebase.
+function limpiar(v) {
+  return typeof v === 'string' ? v.trim() : v;
+}
+
+/** @param {Record<string, string|undefined>} entorno */
+export function readConfig(entorno) {
+  const env = Object.fromEntries(Object.entries(entorno).map(([k, v]) => [k, limpiar(v)]));
   const faltan = REQUERIDAS.filter((k) => !valorValido(env[k]));
   return {
     configured: faltan.length === 0,

@@ -1,5 +1,5 @@
 // Composicion de la aplicacion: estado, ruteo por hash y render.
-import { Home, Calendar, Logout } from './lib/icons.js';
+import { Home, Calendar, Database, Logout } from './lib/icons.js';
 import { h, icono } from './lib/dom.js';
 import { ahoraMadrid, parseISO } from './lib/dates.js';
 import { readConfig } from './config.js';
@@ -8,8 +8,13 @@ import { createRepository, mensajeErrorFirestore } from './services/firestore-re
 import { vistaConfigPendiente, vistaComprobando, vistaLogin } from './features/auth-views.js';
 import { vistaHoy } from './features/today.js';
 import { vistaCalendario } from './features/calendar.js';
+import { vistaDatos } from './features/datos.js';
+import { analizarTexto, calcularDiff } from './data/importer.js';
+import { nombreBackup } from './data/sesiones.js';
 
-const RUTAS = { '#/hoy': 'hoy', '#/calendario': 'calendario' };
+const RUTAS = { '#/hoy': 'hoy', '#/calendario': 'calendario', '#/datos': 'datos' };
+
+const DATOS_VACIOS = () => ({ status: 'idle', sesiones: [], error: null });
 
 export async function startApp(root, env) {
   const config = readConfig(env);
@@ -19,19 +24,70 @@ export async function startApp(root, env) {
     ruta: RUTAS[location.hash] ?? 'hoy',
     mes: (({ y, m }) => ({ y, m }))(parseISO(hoy)),
     seleccionado: hoy,
-    plans: { status: 'idle', items: [], error: null },
+    datos: DATOS_VACIOS(),
+    importacion: { fase: 'idle' },
+    backup: { cargando: false, error: null },
   };
   let servicios = null;
   let repo = null;
 
   const dispatch = (evento) => { estado.auth = reduceAuth(estado.auth, evento); render(); };
 
-  function cargarPlanes() {
-    estado.plans = { status: 'loading', items: [], error: null };
-    repo.listPlans().then(
-      (items) => { estado.plans = { status: 'ready', items, error: null }; render(); },
-      (err) => { estado.plans = { status: 'error', items: [], error: mensajeErrorFirestore(err) }; render(); },
+  function cargarDatos() {
+    estado.datos = { status: 'loading', sesiones: [], error: null };
+    return repo.listSessions().then(
+      (mapa) => { estado.datos = { status: 'ready', sesiones: [...mapa].map(([id, d]) => ({ id, ...d })), error: null }; render(); },
+      (err) => { estado.datos = { status: 'error', sesiones: [], error: mensajeErrorFirestore(err) }; render(); },
     );
+  }
+
+  async function analizarArchivo(archivo) {
+    estado.importacion = { fase: 'leyendo' }; render();
+    try {
+      const analisis = analizarTexto(await archivo.text());
+      if (!analisis.ok) { estado.importacion = { fase: 'error', mensaje: analisis.mensaje }; return render(); }
+      const { resultado } = analisis;
+      // Se compara siempre con lo guardado ahora mismo, no con una copia antigua.
+      const existentes = resultado.ok ? await repo.listSessions() : null;
+      estado.importacion = {
+        fase: 'analizado', nombre: archivo.name, informe: resultado,
+        diff: resultado.ok ? calcularDiff(resultado.plan, existentes) : null,
+      };
+    } catch (err) {
+      estado.importacion = { fase: 'error', mensaje: mensajeErrorFirestore(err) };
+    }
+    render();
+  }
+
+  async function confirmarImportacion() {
+    const imp = estado.importacion;
+    if (imp.fase !== 'analizado' || !imp.informe.ok) return;
+    estado.importacion = { ...imp, fase: 'guardando', progreso: { hechas: 0, total: 0 } }; render();
+    try {
+      const r = await repo.importPlan(imp.informe.plan, imp.diff, (hechas, total) => {
+        estado.importacion.progreso = { hechas, total }; render();
+      });
+      estado.importacion = { fase: 'hecho', escritas: r.escritas };
+      await cargarDatos();
+    } catch (err) {
+      estado.importacion = { ...imp, fase: 'error', mensaje: `${mensajeErrorFirestore(err)} Es seguro repetir la importación: no se duplicará nada.` };
+    }
+    render();
+  }
+
+  async function descargarBackup() {
+    estado.backup = { cargando: true, error: null }; render();
+    try {
+      const copia = await repo.exportAll();
+      const url = URL.createObjectURL(new Blob([JSON.stringify(copia, null, 2)], { type: 'application/json' }));
+      const a = h('a', { href: url, download: nombreBackup(ahoraMadrid().fecha) });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      estado.backup = { cargando: false, error: null };
+    } catch (err) {
+      estado.backup = { cargando: false, error: mensajeErrorFirestore(err) };
+    }
+    render();
   }
 
   function navegacion() {
@@ -42,7 +98,7 @@ export async function startApp(root, env) {
     return h('header', { class: 'sf-top' },
       h('span', { class: 'sf-brand' }, 'StudyFlow'),
       h('nav', { class: 'sf-nav', 'aria-label': 'Principal' },
-        enlace('hoy', 'Hoy', Home), enlace('calendario', 'Calendario', Calendar)),
+        enlace('hoy', 'Hoy', Home), enlace('calendario', 'Calendario', Calendar), enlace('datos', 'Datos', Database)),
       h('button', {
         type: 'button', class: 'button button--ghost button--sm sf-logout',
         onClick: () => servicios.authService.logout(),
@@ -50,14 +106,22 @@ export async function startApp(root, env) {
   }
 
   function contenido() {
+    if (estado.ruta === 'datos') {
+      return vistaDatos({
+        importacion: estado.importacion, datos: estado.datos, backup: estado.backup,
+        onArchivo: analizarArchivo, onConfirmar: confirmarImportacion,
+        onCancelar: () => { estado.importacion = { fase: 'idle' }; render(); },
+        onBackup: descargarBackup,
+      });
+    }
     if (estado.ruta === 'calendario') {
       return vistaCalendario({
-        mes: estado.mes, seleccionado: estado.seleccionado, hoy,
+        datos: estado.datos, mes: estado.mes, seleccionado: estado.seleccionado, hoy,
         onSelect: (iso) => { estado.seleccionado = iso; render(); },
         onMes: (mes) => { estado.mes = mes; render(); },
       });
     }
-    return vistaHoy({ ahora: ahoraMadrid(), plans: estado.plans });
+    return vistaHoy({ ahora: ahoraMadrid(), datos: estado.datos });
   }
 
   function render() {
@@ -94,9 +158,9 @@ export async function startApp(root, env) {
     (user) => {
       if (user && estado.auth.uid !== user.uid) {
         repo = createRepository({ db: fb.db, uid: user.uid });
-        cargarPlanes();
+        cargarDatos();
       }
-      if (!user) { repo = null; estado.plans = { status: 'idle', items: [], error: null }; }
+      if (!user) { repo = null; estado.datos = DATOS_VACIOS(); estado.importacion = { fase: 'idle' }; }
       dispatch({ type: 'SESSION', uid: user ? user.uid : null });
     },
     () => dispatch({ type: 'AUTH_FAILURE', message: 'No se pudo comprobar la sesión. Recarga la página.' }),

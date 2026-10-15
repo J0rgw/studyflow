@@ -9,3 +9,8 @@ export { default as Warning } from 'reicon/icons/Warning';
 export { default as InfoCircle } from 'reicon/icons/InfoCircle';
 export { default as ChevronLeft } from 'reicon/icons/ChevronLeft';
 export { default as ChevronRight } from 'reicon/icons/ChevronRight';
+export { default as Eye } from 'reicon/icons/Eye';
+export { default as EyeOff } from 'reicon/icons/EyeOff';
+export { default as Upload } from 'reicon/icons/Upload';
+export { default as Download } from 'reicon/icons/ArchiveDown';
+export { default as Database } from 'reicon/icons/Database';

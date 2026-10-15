@@ -1,28 +1,48 @@
 import { Calendar, InfoCircle } from '../lib/icons.js';
 import { h, icono } from '../lib/dom.js';
 import { formatoLargo, formatoMinutos, diasEntre } from '../lib/dates.js';
+import { sesionesDelDia, minutosDelDia } from '../data/sesiones.js';
 import {
   MATERIAS, TOTAL_HORAS_PREVISTAS, PERIODO, restriccionesDia, proximoExamen, materiaPorId,
 } from '../data/control.js';
 
-function estadoPlan(plans) {
-  if (plans.status === 'loading' || plans.status === 'idle') {
+function estadoSesiones(datos, fecha) {
+  if (datos.status === 'loading' || datos.status === 'idle') {
     return h('p', { class: 'sf-muted', role: 'status' }, 'Consultando el plan en Firestore…');
   }
-  if (plans.status === 'error') {
+  if (datos.status === 'error') {
     return h('div', { class: 'alert alert--danger', role: 'alert' },
       h('div', { class: 'alert__content' },
         h('p', { class: 'alert__title' }, 'No se pudo leer el plan'),
-        h('p', { class: 'alert__description' }, plans.error)));
+        h('p', { class: 'alert__description' }, datos.error)));
   }
-  if (plans.items.length === 0) {
+  if (datos.sesiones.length === 0) {
     return h('div', { class: 'sf-empty' },
       h('span', { class: 'sf-empty__icon' }, icono(InfoCircle, { size: 24 })),
       h('p', { class: 'sf-empty__title' }, 'Aún no hay ningún plan importado'),
-      h('p', { class: 'sf-muted' },
-        'Las sesiones de cada día saldrán del calendario maestro cuando lo importes (fase 2). Hasta entonces no se muestran sesiones ni horas trabajadas.'));
+      h('p', { class: 'sf-muted' }, 'Importa el plan desde '),
+      h('a', { class: 'button button--secondary', href: '#/datos' }, 'Datos'));
   }
-  return h('p', {}, `Hay ${plans.items.length} plan(es) importado(s). Las sesiones diarias se mostrarán en la fase 2.`);
+  const delDia = sesionesDelDia(datos.sesiones, fecha);
+  if (delDia.length === 0) return h('p', { class: 'sf-muted' }, 'No hay sesiones planificadas para este día.');
+  return h('div', { class: 'sf-stack' },
+    h('p', { class: 'sf-summary' },
+      `Hoy tienes ${delDia.length} sesión${delDia.length === 1 ? '' : 'es'} / ${formatoMinutos(minutosDelDia(datos.sesiones, fecha))} previstas`),
+    h('ul', { class: 'sf-sessions' }, delDia.map(tarjetaSesion)),
+    h('p', { class: 'sf-muted' }, 'Son minutos previstos, no trabajados. El tiempo real se registrará con el Pomodoro (fase 3).'));
+}
+
+export function tarjetaSesion(s) {
+  const m = materiaPorId(s.materiaId);
+  return h('li', { class: 'sf-session' },
+    h('div', { class: 'sf-session__head' },
+      h('span', { class: `sf-dot sf-subject-${s.materiaId}`, 'aria-hidden': 'true' }),
+      h('strong', {}, m ? m.corto : s.materiaId),
+      h('span', { class: 'sf-muted' }, formatoMinutos(s.minutos) + ' previstos'),
+      s.prueba && h('span', { class: 'chip chip--warning' }, h('span', { class: 'chip__label' }, 'PRUEBA'))),
+    h('p', { class: 'sf-session__title' }, s.titulo),
+    h('p', { class: 'sf-muted' }, `Tema: ${s.tema}`),
+    h('p', {}, `Objetivo: ${s.objetivo}`));
 }
 
 function restriccionHoy(hoy) {
@@ -60,7 +80,7 @@ function bloqueHoras() {
     h('p', { class: 'sf-muted' }, 'El tiempo realmente trabajado se registrará con el Pomodoro (fase 3).'));
 }
 
-export function vistaHoy({ ahora, plans }) {
+export function vistaHoy({ ahora, datos }) {
   const enPeriodo = restriccionesDia(ahora.fecha).enPeriodo;
   return h('div', { class: 'sf-page' },
     h('header', { class: 'sf-page__head' },
@@ -71,7 +91,7 @@ export function vistaHoy({ ahora, plans }) {
     h('div', { class: 'sf-grid' },
       h('section', { class: 'card sf-span-2', 'aria-labelledby': 'h-sesiones' },
         h('div', { class: 'card__header' }, h('h2', { id: 'h-sesiones', class: 'card__title' }, 'Sesiones de hoy')),
-        h('div', { class: 'card__content sf-stack' }, estadoPlan(plans), enPeriodo && restriccionHoy(ahora.fecha))),
+        h('div', { class: 'card__content sf-stack' }, estadoSesiones(datos, ahora.fecha), enPeriodo && restriccionHoy(ahora.fecha))),
       h('section', { class: 'card', 'aria-labelledby': 'h-examen' },
         h('div', { class: 'card__header' }, h('h2', { id: 'h-examen', class: 'card__title' }, 'Próximo examen')),
         h('div', { class: 'card__content' }, bloqueExamen(ahora))),

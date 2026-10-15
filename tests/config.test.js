@@ -22,4 +22,9 @@ describe('readConfig', () => {
     expect(c.configured).toBe(false);
     expect(c.missing).toEqual(['VITE_FIREBASE_API_KEY']);
   });
+  it('ignora espacios y saltos de linea al final de los valores', () => {
+    const c = readConfig({ ...completo, VITE_FIREBASE_API_KEY: 'clave\r\n', VITE_LOGIN_EMAIL: ' a@b.es\n' });
+    expect(c.firebase.apiKey).toBe('clave');
+    expect(c.loginEmail).toBe('a@b.es');
+  });
 });
