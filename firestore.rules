@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Datos privados: solo el UID propietario concreto, en cualquier subcoleccion.
+    // Sustituir oGQgZ33jxNedwDHKnEcuO6qAqK43 por el UID exacto ANTES de publicar
+    // (npm run rules:check falla mientras siga el marcador).
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId
+        && request.auth.uid == 'oGQgZ33jxNedwDHKnEcuO6qAqK43';
+    }
+
+    // Denegar todo lo demas de forma explicita (sin sesion o UID ajeno).
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

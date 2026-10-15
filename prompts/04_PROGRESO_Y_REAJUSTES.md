@@ -1,0 +1,2 @@
+# Fase 4 — Seguimiento y reajustes
+Implementa estadísticas planificado vs realizado, déficit por materia, revisión de dudas, objetivos medibles y cierre diario. Reprogramación siempre manual y confirmada, con auditoría, bloqueos y cupos; jamás completar automáticamente una sesión por acabar Pomodoro. Guardar todos los datos en Firestore del único UID; mantener separadas plantillas originales y logs. Tests de idempotencia, restricciones y cálculos; sin commits.

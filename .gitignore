@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.firebase/
+firebase-debug.log
+*.log
+.DS_Store
+# Planes originales y exportaciones con datos personales: no publicar en un repo publico.
+source-plans/
+exports/

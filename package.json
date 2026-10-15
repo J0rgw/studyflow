@@ -1,0 +1,25 @@
+{
+  "name": "studyflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agenda academica personal StudyFlow (UCAM). Frontend estatico para GitHub Pages con Firebase Auth y Firestore.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "rules:check": "node scripts/check-rules.mjs"
+  },
+  "dependencies": {
+    "firebase": "^13.0.0",
+    "reicon": "^1.2.5"
+  },
+  "devDependencies": {
+    "@heroui/styles": "^3.2.6",
+    "@tailwindcss/vite": "^4.3.3",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.4",
+    "vitest": "^4.1.11"
+  }
+}
