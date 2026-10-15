@@ -10,3 +10,5 @@ firebase-debug.log
 # Planes originales y exportaciones con datos personales: no publicar en un repo publico.
 source-plans/
 exports/
+prompts/
+docs/
