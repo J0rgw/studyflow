@@ -1,94 +1,177 @@
-import { ChevronLeft, ChevronRight } from '../lib/icons.js';
+// Vista Calendario (referencia «Calendar Task Manager»): mes con marcas por materia, filtros,
+// lista del dia con barra de color y vista agenda con baldosas de fecha.
+import { ChevronLeft, ChevronRight, Calendar, List, Close } from '../lib/icons.js';
 import { h, icono } from '../lib/dom.js';
 import {
-  cuadriculaMes, nombreMes, formatoLargo, formatoMinutos, sumarMeses,
+  cuadriculaMes, nombreMes, formatoMedio, formatoCorto, formatoMinutos, sumarMeses, rangoFechas, diasEntre,
 } from '../lib/dates.js';
-import { MATERIAS, restriccionesDia, materiaPorId } from '../data/control.js';
-import { sesionesDelDia, minutosDelDia } from '../data/sesiones.js';
-import { tarjetaSesion } from './today.js';
+import {
+  MATERIAS, PERIODO, restriccionesDia, materiaPorId, examenesPendientes,
+} from '../data/control.js';
+import { sesionesDelDia, minutosDelDia, minutosPorMateria } from '../data/sesiones.js';
+import {
+  vacio, esqueleto, aviso, descripcionDia, etiqueta, grupoEtiquetas, etiquetaPrueba, etiquetaExamen, etiquetasEstado, iconoMateria,
+} from './ui.js';
 
 const DIAS = [['L', 'lunes'], ['M', 'martes'], ['X', 'miércoles'], ['J', 'jueves'], ['V', 'viernes'], ['S', 'sábado'], ['D', 'domingo']];
+const capitalizar = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+const cargando = (datos) => datos.status === 'idle' || datos.status === 'loading';
 
-export function descripcionDia(iso) {
-  const r = restriccionesDia(iso);
-  const partes = [formatoLargo(iso)];
-  if (r.bloqueado) partes.push('día bloqueado, 0 horas');
-  else if (r.maxMin != null) partes.push(`máximo ${formatoMinutos(r.maxMin)}`);
-  for (const e of r.examenes) partes.push(`examen de ${materiaPorId(e.materiaId).corto} a las ${e.inicio}`);
-  return partes.join(', ');
+// Filtros por materia (chips de la referencia) como TagGroup de HeroUI con seleccion multiple:
+// activos tintados con el icono relleno y ✕; inactivos solo contorno.
+function filtros(filtro, onFiltro) {
+  return h('div', { class: 'tag-group sf-tags' },
+    h('div', { class: 'tag-group__list', role: 'group', 'aria-label': 'Materias visibles' },
+      MATERIAS.map((m) => {
+        const on = filtro.has(m.id);
+        return h('button', {
+          type: 'button', class: 'tag tag--lg sf-tag sf-tag--materia sf-tag--toggle', style: `--t: var(--sf-${m.id})`,
+          'aria-pressed': String(on), onClick: () => onFiltro(m.id),
+        }, iconoMateria(m.id, { weight: on ? 'Filled' : 'Outline' }), m.corto,
+        on && icono(Close, { size: 14, className: 'sf-tag__x' }));
+      })));
 }
 
-function celda(dia, { seleccionado, hoy, sesiones }, onSelect) {
-  const carga = minutosDelDia(sesiones, dia.iso);
+function celda(dia, { seleccionado, hoy, sesiones, filtro }, onSelect) {
   const r = restriccionesDia(dia.iso);
+  const materias = minutosPorMateria(sesiones, dia.iso);
+  const examenes = r.examenes.filter((e) => filtro.has(e.materiaId));
   const clases = ['sf-day'];
   if (!dia.delMes) clases.push('sf-day--fuera');
-  if (r.enPeriodo) clases.push('sf-day--periodo');
+  else if (!r.enPeriodo) clases.push('sf-day--off');
   if (r.bloqueado) clases.push('sf-day--bloqueado');
   if (dia.iso === seleccionado) clases.push('sf-day--sel');
   if (dia.iso === hoy) clases.push('sf-day--hoy');
   return h('td', {},
     h('button', {
-      type: 'button', class: clases.join(' '), 'aria-label': descripcionDia(dia.iso) + (carga > 0 ? `, ${formatoMinutos(carga)} previstos` : ''),
+      type: 'button', class: clases.join(' '), 'aria-label': descripcionDia(dia.iso, minutosDelDia(sesiones, dia.iso)),
       'aria-pressed': dia.iso === seleccionado ? 'true' : 'false',
       'aria-current': dia.iso === hoy ? 'date' : null,
       onClick: () => onSelect(dia.iso),
     },
+    // Como en la referencia, numero y rayas comparten circulo (relleno en el dia elegido).
+    h('span', { class: 'sf-day__in' },
       h('span', { class: 'sf-day__num' }, dia.dia),
-      r.bloqueado && h('span', { class: 'sf-day__tag' }, 'Bloqueado'),
-      !r.bloqueado && r.maxMin != null && h('span', { class: 'sf-day__tag' }, `máx. ${formatoMinutos(r.maxMin)}`),
-      carga > 0 && h('span', { class: 'sf-day__tag sf-day__load' }, formatoMinutos(carga)),
-      r.examenes.length > 0 && h('span', { class: 'sf-day__exams' },
-        r.examenes.map((e) => h('span', { class: `sf-dot sf-subject-${e.materiaId}`, title: `Examen ${materiaPorId(e.materiaId).corto}` })),
-        h('span', { class: 'sf-day__tag' }, 'Examen')),
-    ));
+      // Una raya por materia con sesiones; un punto por examen (forma distinta = evento con hora).
+      h('span', { class: 'sf-day__marks', 'aria-hidden': 'true' },
+        materias.map((x) => h('i', { class: 'sf-mark', style: `--m: var(--sf-${x.materiaId})` })),
+        examenes.map((e) => h('i', { class: 'sf-mark sf-mark--exam', style: `--m: var(--sf-${e.materiaId})` }))))));
 }
 
-function panelDia(iso, datos) {
+// Evento de la lista: barra lateral + etiqueta del color de la materia + titulo (referencia).
+function evento({ materiaId, marca, titulo, meta, prueba, examen }) {
+  return h('li', { class: `sf-event${examen ? ' is-exam' : ''}`, style: `--m: var(--sf-${materiaId})` },
+    h('div', { class: 'sf-event__label' }, marca),
+    h('p', { class: 'sf-event__title' }, titulo, prueba && etiquetaPrueba()),
+    meta && h('p', { class: 'sf-event__meta' }, meta));
+}
+
+function eventosDia(iso, sesiones, filtro) {
+  return [
+    ...restriccionesDia(iso).examenes.filter((e) => filtro.has(e.materiaId)).map((e) => evento({
+      materiaId: e.materiaId, examen: true, marca: etiquetaExamen(e.materiaId, `Examen · ${e.inicio}–${e.fin}`),
+      titulo: materiaPorId(e.materiaId).nombre,
+    })),
+    ...sesionesDelDia(sesiones, iso).map((s) => evento({
+      materiaId: s.materiaId,
+      marca: etiqueta(`${materiaPorId(s.materiaId)?.corto ?? s.materiaId} · ${formatoMinutos(s.minutos)}`, { materia: s.materiaId }),
+      titulo: s.titulo, meta: s.tema, prueba: s.prueba,
+    })),
+  ];
+}
+
+// Dias que faltan para cada examen vistos desde el dia elegido (los de ese mismo dia ya son eventos).
+function faltanExamenes(iso, filtro) {
+  const proximos = examenesPendientes(iso, '00:00').filter((e) => filtro.has(e.materiaId) && e.fecha > iso);
+  if (proximos.length === 0) return null;
+  return h('div', { class: 'sf-daypanel__exams' },
+    h('h3', { class: 'sf-label' }, 'Exámenes'),
+    grupoEtiquetas(proximos.map((e) => {
+      const d = diasEntre(iso, e.fecha);
+      return etiquetaExamen(e.materiaId, `${materiaPorId(e.materiaId).corto} · ${d} d`);
+    }), `Días hasta cada examen desde el ${formatoMedio(iso)}`));
+}
+
+function estadoDatos(datos, filas = 2) {
+  if (cargando(datos)) return esqueleto(filas);
+  if (datos.status === 'error') return aviso('No se pudo cargar', datos.error);
+  if (datos.sesiones.length === 0) return vacio('Sin plan importado', h('a', { class: 'button button--secondary button--sm', href: '#/datos' }, 'Importar plan'));
+  return null;
+}
+
+function panelDia(iso, datos, sesiones, filtro) {
   const r = restriccionesDia(iso);
-  const delDia = sesionesDelDia(datos.sesiones, iso);
-  return h('section', { class: 'card', 'aria-labelledby': 'cal-dia', 'aria-live': 'polite' },
-    h('div', { class: 'card__header' }, h('h2', { id: 'cal-dia', class: 'card__title' }, formatoLargo(iso))),
-    h('div', { class: 'card__content sf-stack' },
-      r.bloqueado && h('p', {}, h('span', { class: 'chip chip--danger' }, h('span', { class: 'chip__label' }, 'Día bloqueado')), ' Descanso: 0 h de estudio.'),
-      !r.bloqueado && r.maxMin != null && h('p', {}, h('span', { class: 'chip chip--warning' }, h('span', { class: 'chip__label' }, 'Límite')), ` Máximo ${formatoMinutos(r.maxMin)} efectivos.`),
-      !r.enPeriodo && h('p', { class: 'sf-muted' }, 'Fuera del periodo de estudio (14/10 a 08/11/2026).'),
-      r.examenes.length > 0 && h('div', { class: 'sf-stack-sm' },
-        h('h3', {}, 'Exámenes'),
-        h('ul', { class: 'sf-list' }, r.examenes.map((e) => {
-          const m = materiaPorId(e.materiaId);
-          return h('li', {}, h('span', { class: `sf-dot sf-subject-${m.id}`, 'aria-hidden': 'true' }), `${m.nombre}, ${e.inicio}–${e.fin}`);
-        })),
-        h('p', { class: 'sf-muted' }, 'Las horas de examen no se cuentan como tiempo estudiado.')),
-      h('div', { class: 'sf-stack-sm' },
-        h('h3', {}, 'Sesiones'),
-        datos.status === 'error' && h('p', { class: 'sf-error', role: 'alert' }, datos.error),
-        (datos.status === 'idle' || datos.status === 'loading') && h('p', { class: 'sf-muted', role: 'status' }, 'Cargando sesiones…'),
-        datos.status === 'ready' && delDia.length > 0 && h('ul', { class: 'sf-sessions' }, delDia.map(tarjetaSesion)),
-        datos.status === 'ready' && delDia.length === 0 && h('p', { class: 'sf-muted' },
-          datos.sesiones.length === 0
-            ? 'Sin sesiones: aún no hay un plan importado. No se inventan sesiones ni horas de comienzo.'
-            : 'No hay sesiones planificadas este día.'))));
+  const eventos = datos.status === 'ready' ? eventosDia(iso, sesiones, filtro) : [];
+  const total = minutosDelDia(sesiones, iso);
+  const cuerpo = estadoDatos(datos)
+    ?? (eventos.length > 0 ? h('ul', { class: 'sf-events' }, eventos) : vacio(r.bloqueado ? 'Día bloqueado' : 'Sin sesiones'));
+  return h('section', { class: 'sf-card sf-daypanel', 'aria-labelledby': 'cal-dia', 'aria-live': 'polite' },
+    h('div', { class: 'sf-card__head' },
+      h('h2', { id: 'cal-dia', class: 'sf-daypanel__title' }, capitalizar(formatoMedio(iso))),
+      total > 0 && h('span', { class: 'sf-daypanel__total' }, formatoMinutos(total))),
+    grupoEtiquetas(etiquetasEstado(r), 'Estado del día'),
+    cuerpo,
+    faltanExamenes(iso, filtro));
 }
 
-export function vistaCalendario({ mes, seleccionado, hoy, datos, onSelect, onMes }) {
-  const semanas = cuadriculaMes(mes.y, mes.m);
-  const ant = sumarMeses(mes.y, mes.m, -1);
-  const sig = sumarMeses(mes.y, mes.m, 1);
+function mes({ mes: m, seleccionado, hoy, datos, sesiones, filtro, onSelect, onMes, onFiltro }) {
+  const ant = sumarMeses(m.y, m.m, -1);
+  const sig = sumarMeses(m.y, m.m, 1);
+  return h('div', { class: 'sf-cal-layout' },
+    h('section', { class: 'sf-card sf-month', 'aria-labelledby': 'cal-mes' },
+      filtros(filtro, onFiltro),
+      h('div', { class: 'sf-monthnav' },
+        h('button', { type: 'button', class: 'sf-square', 'aria-label': 'Mes anterior', onClick: () => onMes(ant) }, icono(ChevronLeft, { size: 18 })),
+        h('h2', { id: 'cal-mes', class: 'sf-monthnav__title' }, nombreMes(m.y, m.m)),
+        h('button', { type: 'button', class: 'sf-square', 'aria-label': 'Mes siguiente', onClick: () => onMes(sig) }, icono(ChevronRight, { size: 18 }))),
+      h('table', { class: 'sf-cal' },
+        h('thead', {}, h('tr', {}, DIAS.map(([c, n]) => h('th', { scope: 'col' }, h('abbr', { title: n }, c))))),
+        h('tbody', {}, cuadriculaMes(m.y, m.m).map((s) => h('tr', {},
+          s.map((d) => celda(d, { seleccionado, hoy, sesiones, filtro }, onSelect)))))),
+      h('ul', { class: 'sf-legend' },
+        h('li', {}, h('i', { class: 'sf-mark sf-mark--legend', 'aria-hidden': 'true' }), 'Sesiones'),
+        h('li', {}, h('i', { class: 'sf-mark sf-mark--exam sf-mark--legend', 'aria-hidden': 'true' }), 'Examen'),
+        h('li', {}, h('span', { class: 'sf-swatch sf-swatch--bloqueado', 'aria-hidden': 'true' }), 'Bloqueado'))),
+    panelDia(seleccionado, datos, sesiones, filtro));
+}
+
+// Vista agenda (tercera pantalla de la referencia): baldosa de fecha + eventos del dia.
+function agenda({ seleccionado, hoy, datos, sesiones, filtro, onSelect, onFiltro }) {
+  const desde = hoy >= PERIODO.inicio && hoy <= PERIODO.fin ? hoy : PERIODO.inicio;
+  const estado = estadoDatos(datos, 4);
+  return h('section', { class: 'sf-card sf-agenda-card', 'aria-label': 'Agenda del periodo' },
+    filtros(filtro, onFiltro),
+    estado ?? h('ul', { class: 'sf-agenda' }, rangoFechas(desde, PERIODO.fin).map((iso) => {
+      const r = restriccionesDia(iso);
+      const eventos = eventosDia(iso, sesiones, filtro);
+      const clases = ['sf-agenda__day'];
+      if (iso === seleccionado) clases.push('is-sel');
+      if (r.bloqueado) clases.push('is-blocked');
+      return h('li', { class: clases.join(' ') },
+        h('button', {
+          type: 'button', class: 'sf-agenda__date', 'aria-pressed': String(iso === seleccionado),
+          'aria-label': descripcionDia(iso, minutosDelDia(sesiones, iso)), onClick: () => onSelect(iso),
+        },
+        h('span', { class: 'sf-agenda__d' }, iso === hoy ? 'Hoy' : formatoCorto(iso).replace(/^\S+ /, '')),
+        h('span', { class: 'sf-agenda__wd' }, iso === hoy ? formatoCorto(iso).replace(/^\S+ /, '') : formatoMedio(iso).split(' ')[0])),
+        h('div', { class: 'sf-agenda__events' }, eventos.length > 0
+          ? h('ul', { class: 'sf-events' }, eventos)
+          : h('p', { class: 'sf-agenda__none' }, r.bloqueado ? 'Día bloqueado' : 'Sin sesiones')));
+    })));
+}
+
+export function vistaCalendario({ mes: m, seleccionado, hoy, datos, vista, filtro, onSelect, onMes, onVista, onFiltro }) {
+  const sesiones = datos.sesiones.filter((s) => filtro.has(s.materiaId));
+  const props = { mes: m, seleccionado, hoy, datos, sesiones, filtro, onSelect, onMes, onFiltro };
+  const boton = (v, etiqueta, icon) => h('button', {
+    type: 'button', class: 'sf-square', 'aria-label': etiqueta, 'aria-pressed': String(vista === v), onClick: () => onVista(v),
+  }, icono(icon, { size: 18, weight: vista === v ? 'Filled' : 'Outline' }));
   return h('div', { class: 'sf-page' },
-    h('header', { class: 'sf-page__head' }, h('h1', {}, 'Calendario')),
-    h('div', { class: 'sf-cal-layout' },
-      h('section', { class: 'card', 'aria-labelledby': 'cal-mes' },
-        h('div', { class: 'sf-cal-nav' },
-          h('button', { type: 'button', class: 'button button--ghost button--icon-only', 'aria-label': 'Mes anterior', onClick: () => onMes(ant) }, icono(ChevronLeft)),
-          h('h2', { id: 'cal-mes', class: 'sf-cal-nav__title' }, nombreMes(mes.y, mes.m)),
-          h('button', { type: 'button', class: 'button button--ghost button--icon-only', 'aria-label': 'Mes siguiente', onClick: () => onMes(sig) }, icono(ChevronRight))),
-        h('table', { class: 'sf-cal' },
-          h('thead', {}, h('tr', {}, DIAS.map(([c, n]) => h('th', { scope: 'col' }, h('abbr', { title: n }, c))))),
-          h('tbody', {}, semanas.map((s) => h('tr', {}, s.map((d) => celda(d, { seleccionado, hoy, sesiones: datos.sesiones }, onSelect)))))),
-        h('ul', { class: 'sf-legend' },
-          MATERIAS.map((m) => h('li', {}, h('span', { class: `sf-dot sf-subject-${m.id}`, 'aria-hidden': 'true' }), m.corto)),
-          h('li', {}, h('span', { class: 'sf-swatch sf-swatch--bloqueado', 'aria-hidden': 'true' }), 'Bloqueado'),
-          h('li', {}, h('span', { class: 'sf-swatch sf-swatch--periodo', 'aria-hidden': 'true' }), 'Periodo de estudio'))),
-      panelDia(seleccionado, datos)));
+    h('header', { class: 'sf-head' },
+      h('div', {},
+        h('p', { class: 'sf-eyebrow' }, `${formatoCorto(PERIODO.inicio).replace(/^\S+ /, '')} – ${formatoCorto(PERIODO.fin).replace(/^\S+ /, '')}`),
+        h('h1', {}, vista === 'agenda' ? 'Agenda' : 'Calendario')),
+      h('div', { class: 'sf-viewtoggle', role: 'group', 'aria-label': 'Vista del calendario' },
+        boton('mes', 'Mes', Calendar), boton('agenda', 'Agenda', List))),
+    vista === 'agenda' ? agenda(props) : mes(props));
 }

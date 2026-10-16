@@ -13,6 +13,8 @@
     "test:rules": "firebase emulators:exec --only firestore --project demo-studyflow \"vitest run -c vitest.rules.config.js\""
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/open-runde": "^5.3.0",
     "firebase": "^13.0.0",
     "reicon": "^1.2.5"
   },

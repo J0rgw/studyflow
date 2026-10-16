@@ -14,3 +14,23 @@ export { default as EyeOff } from 'reicon/icons/EyeOff';
 export { default as Upload } from 'reicon/icons/Upload';
 export { default as Download } from 'reicon/icons/ArchiveDown';
 export { default as Database } from 'reicon/icons/Database';
+export { default as Sun } from 'reicon/icons/Sun';
+export { default as Moon } from 'reicon/icons/Moon';
+export { default as Hierarchy } from 'reicon/icons/Hierarchy';
+export { default as Target } from 'reicon/icons/Target';
+export { default as Close } from 'reicon/icons/X';
+export { default as Check } from 'reicon/icons/Check';
+export { default as List } from 'reicon/icons/List';
+export { default as Trash } from 'reicon/icons/Trash';
+
+// Identificadores de las etiquetas: uno por materia y uno por estado.
+// «Math» se renombra para no tapar el objeto global Math en quien lo importe.
+export { default as Formula } from 'reicon/icons/Math';
+export { default as ClipboardCheck } from 'reicon/icons/ClipboardCheck';
+export { default as SignalStream } from 'reicon/icons/SignalStream';
+export { default as Mobile } from 'reicon/icons/Mobile';
+export { default as PenWriting } from 'reicon/icons/PenWriting';
+export { default as TestTube } from 'reicon/icons/TestTube';
+export { default as Hourglass } from 'reicon/icons/Hourglass';
+export { default as Ban } from 'reicon/icons/Ban';
+export { default as CalendarX } from 'reicon/icons/CalendarX';

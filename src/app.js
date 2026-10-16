@@ -1,5 +1,8 @@
 // Composicion de la aplicacion: estado, ruteo por hash y render.
-import { Home, Calendar, Database, Logout } from './lib/icons.js';
+import {
+  Home, Calendar, Hierarchy, Database, Logout, Sun, Moon,
+} from './lib/icons.js';
+import { temaEfectivo, alternarTema } from './lib/theme.js';
 import { h, icono } from './lib/dom.js';
 import { ahoraMadrid, parseISO } from './lib/dates.js';
 import { readConfig } from './config.js';
@@ -8,13 +11,25 @@ import { createRepository, mensajeErrorFirestore } from './services/firestore-re
 import { vistaConfigPendiente, vistaComprobando, vistaLogin } from './features/auth-views.js';
 import { vistaHoy } from './features/today.js';
 import { vistaCalendario } from './features/calendar.js';
+import { vistaPlan } from './features/plan.js';
 import { vistaDatos } from './features/datos.js';
+import { logo } from './features/ui.js';
 import { analizarTexto, calcularDiff } from './data/importer.js';
+import { MATERIAS } from './data/control.js';
 import { nombreBackup } from './data/sesiones.js';
 
-const RUTAS = { '#/hoy': 'hoy', '#/calendario': 'calendario', '#/datos': 'datos' };
+const RUTAS = { '#/hoy': 'hoy', '#/calendario': 'calendario', '#/plan': 'plan', '#/datos': 'datos' };
+const DESTINOS = [['hoy', 'Hoy', Home], ['calendario', 'Calendario', Calendar], ['plan', 'Plan', Hierarchy], ['datos', 'Datos', Database]];
 
 const DATOS_VACIOS = () => ({ status: 'idle', sesiones: [], error: null });
+
+// Cambio de vista con View Transitions (la capsula activa de la navegacion se desliza).
+// Sin soporte o con movimiento reducido, el cambio es inmediato.
+function transicion(actualizar) {
+  if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.startViewTransition(actualizar);
+  } else actualizar();
+}
 
 export async function startApp(root, env) {
   const config = readConfig(env);
@@ -27,9 +42,13 @@ export async function startApp(root, env) {
     datos: DATOS_VACIOS(),
     importacion: { fase: 'idle' },
     backup: { cargando: false, error: null },
+    // Calendario: vista mes/agenda y materias visibles (solo en memoria, como en la referencia).
+    calVista: 'mes',
+    filtro: new Set(MATERIAS.map((m) => m.id)),
   };
   let servicios = null;
   let repo = null;
+  let rutaPintada = null;
 
   const dispatch = (evento) => { estado.auth = reduceAuth(estado.auth, evento); render(); };
 
@@ -67,10 +86,11 @@ export async function startApp(root, env) {
       const r = await repo.importPlan(imp.informe.plan, imp.diff, (hechas, total) => {
         estado.importacion.progreso = { hechas, total }; render();
       });
-      estado.importacion = { fase: 'hecho', escritas: r.escritas };
+      // La fila del archivo se queda en estado «guardado» (referencia Subida).
+      estado.importacion = { fase: 'hecho', escritas: r.escritas, nombre: imp.nombre, informe: imp.informe };
       await cargarDatos();
     } catch (err) {
-      estado.importacion = { ...imp, fase: 'error', mensaje: `${mensajeErrorFirestore(err)} Es seguro repetir la importación: no se duplicará nada.` };
+      estado.importacion = { ...imp, fase: 'error', mensaje: `${mensajeErrorFirestore(err)} Puedes reintentar sin duplicar.` };
     }
     render();
   }
@@ -90,22 +110,47 @@ export async function startApp(root, env) {
     render();
   }
 
+  // Navegacion (referencia Menu movil): capsula con el destino activo relleno y con etiqueta.
   function navegacion() {
-    const enlace = (ruta, texto, icon) => h('a', {
-      class: `sf-nav__link${estado.ruta === ruta ? ' is-active' : ''}`,
-      href: `#/${ruta}`, 'aria-current': estado.ruta === ruta ? 'page' : null,
-    }, icono(icon), h('span', {}, texto));
+    const enlace = ([ruta, texto, icon]) => {
+      const activo = estado.ruta === ruta;
+      return h('a', {
+        class: `sf-nav__link${activo ? ' is-active' : ''}`, href: `#/${ruta}`, 'aria-current': activo ? 'page' : null,
+      },
+      activo && h('span', { class: 'sf-nav__pill', 'aria-hidden': 'true' }),
+      // Cada contenido tiene nombre propio para que View Transitions anime su recolocacion
+      // (en movil el activo gana etiqueta y los demas se desplazan, como en la referencia).
+      h('span', { class: 'sf-nav__content', style: `view-transition-name: sf-navc-${ruta}; view-transition-class: sf-navc` },
+        icono(icon, { size: 20, weight: activo ? 'Filled' : 'Outline' }),
+        // La etiqueta activa va aparte: se apaga antes de moverse y la nueva aparece despues.
+        h('span', { class: 'sf-nav__label', style: activo ? 'view-transition-name: sf-nav-label' : null }, texto)));
+    };
+    const oscuro = temaEfectivo() === 'dark';
     return h('header', { class: 'sf-top' },
-      h('span', { class: 'sf-brand' }, 'StudyFlow'),
-      h('nav', { class: 'sf-nav', 'aria-label': 'Principal' },
-        enlace('hoy', 'Hoy', Home), enlace('calendario', 'Calendario', Calendar), enlace('datos', 'Datos', Database)),
-      h('button', {
-        type: 'button', class: 'button button--ghost button--sm sf-logout',
-        onClick: () => servicios.authService.logout(),
-      }, icono(Logout, { size: 18 }), h('span', {}, 'Cerrar sesión')));
+      h('a', { class: 'sf-brand', href: '#/hoy' }, logo(), h('span', {}, 'StudyFlow')),
+      h('nav', { class: 'sf-nav', 'aria-label': 'Principal' }, DESTINOS.map(enlace)),
+      h('div', { class: 'sf-top__tools' },
+        h('button', {
+          type: 'button', class: 'button button--ghost button--sm button--icon-only sf-tool',
+          'aria-label': oscuro ? 'Tema claro' : 'Tema oscuro',
+          onClick: () => { alternarTema(); render(); },
+        }, icono(oscuro ? Sun : Moon, { size: 18 })),
+        h('button', {
+          type: 'button', class: 'button button--ghost button--sm button--icon-only sf-tool', 'aria-label': 'Salir',
+          onClick: () => servicios.authService.logout(),
+        }, icono(Logout, { size: 18 }))));
+  }
+
+  function elegirFecha(iso) {
+    estado.seleccionado = iso;
+    const { y, m } = parseISO(iso);
+    estado.mes = { y, m };
+    render();
   }
 
   function contenido() {
+    const ahora = ahoraMadrid();
+    if (estado.ruta === 'plan') return vistaPlan({ datos: estado.datos, hoy: ahora.fecha });
     if (estado.ruta === 'datos') {
       return vistaDatos({
         importacion: estado.importacion, datos: estado.datos, backup: estado.backup,
@@ -116,12 +161,18 @@ export async function startApp(root, env) {
     }
     if (estado.ruta === 'calendario') {
       return vistaCalendario({
-        datos: estado.datos, mes: estado.mes, seleccionado: estado.seleccionado, hoy,
+        datos: estado.datos, mes: estado.mes, seleccionado: estado.seleccionado, hoy: ahora.fecha,
+        vista: estado.calVista, filtro: estado.filtro,
         onSelect: (iso) => { estado.seleccionado = iso; render(); },
         onMes: (mes) => { estado.mes = mes; render(); },
+        onVista: (v) => { estado.calVista = v; render(); },
+        onFiltro: (id) => {
+          if (estado.filtro.has(id)) estado.filtro.delete(id); else estado.filtro.add(id);
+          render();
+        },
       });
     }
-    return vistaHoy({ ahora: ahoraMadrid(), datos: estado.datos });
+    return vistaHoy({ ahora, datos: estado.datos, seleccionado: estado.seleccionado, onSelect: elegirFecha });
   }
 
   function render() {
@@ -138,14 +189,18 @@ export async function startApp(root, env) {
         },
       });
     } else {
-      vista = h('div', { class: 'sf-shell' }, navegacion(), h('main', { id: 'contenido' }, contenido()));
+      // La entrada de vista (fade + 8px) solo al cambiar de ruta, no en cada re-render.
+      const entra = estado.ruta !== rutaPintada;
+      rutaPintada = estado.ruta;
+      vista = h('div', { class: 'sf-shell' }, navegacion(),
+        h('main', { id: 'contenido', class: entra ? 'is-entering' : null }, contenido()));
     }
     root.replaceChildren(vista);
   }
 
   window.addEventListener('hashchange', () => {
     estado.ruta = RUTAS[location.hash] ?? 'hoy';
-    render();
+    transicion(() => { render(); window.scrollTo({ top: 0, behavior: 'instant' }); });
   });
 
   if (!config.configured) { dispatch({ type: 'CONFIG_MISSING' }); return; }

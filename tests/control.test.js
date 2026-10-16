@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  MATERIAS, TOTAL_HORAS_PREVISTAS, restriccionesDia, proximoExamen, EXAMENES,
+  MATERIAS, TOTAL_HORAS_PREVISTAS, restriccionesDia, proximoExamen, examenesPendientes, EXAMENES,
 } from '../src/data/control.js';
 
 describe('datos de control', () => {
@@ -36,5 +36,13 @@ describe('datos de control', () => {
     expect(proximoExamen('2026-10-15', '10:00').materiaId).toBe('requisitos');
     expect(proximoExamen('2026-11-07', '12:00').materiaId).toBe('algebra');
     expect(proximoExamen('2026-11-08', '15:00')).toBeNull();
+  });
+  it('examenesPendientes desde un dia elegido (00:00) incluye los de ese mismo dia', () => {
+    const ids = (f, h) => examenesPendientes(f, h).map((e) => e.materiaId);
+    expect(ids('2026-10-20', '00:00')).toEqual(['requisitos', 'algebra', 'moviles', 'tac']);
+    expect(ids('2026-11-07', '00:00')).toEqual(['requisitos', 'algebra', 'moviles', 'tac']);
+    expect(ids('2026-11-07', '11:00')).toEqual(['algebra', 'moviles', 'tac']);
+    expect(ids('2026-11-08', '00:00')).toEqual(['moviles', 'tac']);
+    expect(ids('2026-11-09', '00:00')).toEqual([]);
   });
 });

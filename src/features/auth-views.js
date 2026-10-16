@@ -1,36 +1,27 @@
-import { Lock, Warning, Key, Eye, EyeOff } from '../lib/icons.js';
+import { Warning, Eye, EyeOff } from '../lib/icons.js';
 import { h, icono } from '../lib/dom.js';
+import { logo, cargador } from './ui.js';
+
+function marcaGrande() {
+  return h('div', { class: 'sf-auth__brand' }, logo(), h('span', {}, 'StudyFlow'));
+}
 
 export function vistaConfigPendiente(missing) {
   return h('main', { class: 'sf-center' },
-    h('section', { class: 'card sf-panel', 'aria-labelledby': 'cfg-titulo' },
-      h('div', { class: 'card__header' },
-        h('span', { class: 'sf-badge' }, icono(Key)),
-        h('h1', { id: 'cfg-titulo', class: 'card__title' }, 'StudyFlow'),
-      ),
-      h('div', { class: 'card__content sf-stack' },
-        h('div', { class: 'alert alert--warning', role: 'status' },
-          h('div', { class: 'alert__indicator' }, icono(Warning)),
-          h('div', { class: 'alert__content' },
-            h('p', { class: 'alert__title' }, 'Configuración de Firebase pendiente'),
-            h('p', { class: 'alert__description' },
-              'La web está desplegada, pero aún no tiene los datos de conexión. No se muestra ningún dato privado hasta configurarla.'),
-          ),
-        ),
-        h('p', {}, 'Variables que faltan o conservan el marcador de ejemplo:'),
-        h('ul', { class: 'sf-code-list' }, missing.map((m) => h('li', {}, h('code', {}, m)))),
-        h('p', { class: 'sf-muted' },
-          'Rellénalas en ', h('code', {}, '.env.local'), ' (local) o como variables del repositorio (Pages). Pasos en ',
-          h('code', {}, 'docs/firebase-setup.md'), '.'),
-      ),
-    ),
-  );
+    h('section', { class: 'sf-card sf-auth', 'aria-labelledby': 'cfg-titulo' },
+      marcaGrande(),
+      h('h1', { id: 'cfg-titulo', class: 'sf-auth__title' }, 'Falta configurar Firebase'),
+      h('div', { class: 'alert alert--warning sf-alert', role: 'status' },
+        h('div', { class: 'alert__indicator' }, icono(Warning)),
+        h('div', { class: 'alert__content' },
+          h('p', { class: 'alert__title' }, 'Variables pendientes'),
+          h('ul', { class: 'sf-code-list' }, missing.map((m) => h('li', {}, h('code', {}, m)))))),
+      h('p', { class: 'sf-muted' }, h('code', {}, 'docs/firebase-setup.md'))));
 }
 
 export function vistaComprobando() {
   return h('main', { class: 'sf-center' },
-    h('p', { class: 'sf-muted', role: 'status' }, 'Comprobando sesión…'),
-  );
+    h('div', { class: 'sf-checking' }, cargador('Comprobando sesión'), h('p', { class: 'sf-muted' }, 'Comprobando sesión…')));
 }
 
 export function vistaLogin(state, { onLogin }) {
@@ -53,7 +44,7 @@ export function vistaLogin(state, { onLogin }) {
     },
   }, icono(Eye));
   const form = h('form', {
-    class: 'sf-stack', novalidate: true,
+    class: 'sf-auth__form', novalidate: true,
     onSubmit: (e) => {
       e.preventDefault();
       const valor = campo.value;
@@ -61,22 +52,16 @@ export function vistaLogin(state, { onLogin }) {
       onLogin(valor);
     },
   },
-    h('div', { class: 'sf-field' },
-      h('label', { class: 'label', for: 'password' }, 'Contraseña'),
-      h('div', { class: 'sf-password' }, campo, boton),
-    ),
-    state.error && h('p', { id: 'login-error', class: 'sf-error', role: 'alert' }, state.error),
-    h('button', { class: 'button button--primary button--full-width', type: 'submit', disabled: cargando },
-      cargando ? 'Entrando…' : 'Entrar'),
-  );
+  h('div', { class: 'sf-field' },
+    h('label', { class: 'label', for: 'password' }, 'Contraseña'),
+    h('div', { class: 'sf-password' }, campo, boton)),
+  state.error && h('p', { id: 'login-error', class: 'sf-error', role: 'alert' }, state.error),
+  h('button', { class: 'button button--primary button--full-width sf-auth__submit', type: 'submit', disabled: cargando },
+    cargando && cargador('Entrando'), cargando ? 'Entrando…' : 'Entrar'));
   queueMicrotask(() => { if (!cargando) campo.focus(); });
   return h('main', { class: 'sf-center' },
-    h('section', { class: 'card sf-panel', 'aria-labelledby': 'login-titulo' },
-      h('div', { class: 'card__header' },
-        h('span', { class: 'sf-badge' }, icono(Lock)),
-        h('h1', { id: 'login-titulo', class: 'card__title' }, 'StudyFlow'),
-      ),
-      h('div', { class: 'card__content' }, form),
-    ),
-  );
+    h('section', { class: 'sf-card sf-auth', 'aria-labelledby': 'login-titulo' },
+      marcaGrande(),
+      h('h1', { id: 'login-titulo', class: 'sf-sr' }, 'Iniciar sesión en StudyFlow'),
+      form));
 }

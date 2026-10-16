@@ -1,0 +1,136 @@
+/* Tokens StudyFlow (docs/design.md §2-§6). Claro por defecto; oscuro por sistema o data-theme. */
+:root {
+  color-scheme: light;
+  --sf-bg: oklch(0.975 0.004 255);
+  --sf-surface: oklch(1 0 0);
+  --sf-surface-2: oklch(0.955 0.006 255);
+  --sf-line: oklch(0.92 0.006 255);
+  --sf-track: oklch(0.9 0.008 255);
+  --sf-muted: oklch(0.52 0.02 260);
+  --sf-ink: oklch(0.2 0.02 265);
+
+  --sf-accent: oklch(0.2 0.02 265);
+  --sf-on-accent: oklch(0.98 0 0);
+  --sf-ok: oklch(0.62 0.15 155);
+  --sf-ok-ink: oklch(0.45 0.12 155);
+  --sf-warn: oklch(0.7 0.15 75);
+  --sf-warn-ink: oklch(0.45 0.1 70);
+  --sf-danger: oklch(0.58 0.2 25);
+
+  --sf-algebra: oklch(0.55 0.17 265);
+  --sf-requisitos: oklch(0.56 0.14 160);
+  --sf-tac: oklch(0.6 0.15 55);
+  --sf-moviles: oklch(0.55 0.17 330);
+
+  /* Previsto = tenue (design.md §5). El trabajado usara el color pleno. */
+  --sf-plan-opacity: 0.5;
+
+  /* Etiquetas solidas: en claro el color se oscurece un poco hacia la tinta para que el texto
+     blanco pase AA; en oscuro va puro con texto oscuro. Ambar (aviso) siempre con texto oscuro. */
+  --sf-tag-mix: 88%;
+  --sf-on-tag: oklch(0.99 0 0);
+  --sf-on-warn: oklch(0.24 0.05 70);
+
+  /* Pantalla de la cuenta atras y capsula de navegacion (referencias temporizador StandBy y menu
+     movil). En claro van sobre superficie clara con la navegacion en tinta; el relleno que barre
+     la cuenta atras es lima en ambos temas. */
+  --sf-display-bg: oklch(0.955 0.006 255);
+  --sf-display-ink: oklch(0.2 0.02 265);
+  --sf-display-muted: oklch(0.52 0.02 260);
+  --sf-display-fill: oklch(0.88 0.17 125);
+  --sf-display-on-fill: oklch(0.24 0.05 125);
+  --sf-nav-bg: oklch(1 0 0);
+  --sf-nav-line: oklch(0.92 0.006 255);
+  --sf-nav-ink: oklch(0.52 0.02 260);
+  --sf-nav-active: oklch(0.2 0.02 265);
+  --sf-nav-on-active: oklch(0.98 0 0);
+
+  --sf-shadow-float: 0 14px 34px -14px oklch(0.2 0.03 265 / 0.5), 0 2px 8px -2px oklch(0.2 0.03 265 / 0.18);
+  --sf-shadow-raised: 0 1px 2px oklch(0.2 0.03 265 / 0.08), 0 4px 12px -6px oklch(0.2 0.03 265 / 0.16);
+
+  --sf-font-display: "Open Runde", "Inter", ui-rounded, system-ui, sans-serif;
+  --sf-font-body: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sf-font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --sf-text-hero: clamp(3.5rem, 15vw, 4.25rem);
+  --sf-text-display: clamp(4rem, 21vw, 5.25rem);
+
+  --sf-radius-sm: 10px;
+  --sf-radius: 16px;
+  --sf-radius-lg: 22px;
+  --sf-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --sf-t-fast: 120ms;
+  --sf-t: 220ms;
+  --sf-t-enter: 400ms;
+  --sf-bar-h: 3.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --sf-bg: oklch(0.15 0.012 265);
+    --sf-surface: oklch(0.195 0.014 265);
+    --sf-surface-2: oklch(0.235 0.016 265);
+    --sf-line: oklch(0.29 0.016 265);
+    --sf-track: oklch(0.31 0.016 265);
+    --sf-muted: oklch(0.7 0.02 260);
+    --sf-ink: oklch(0.96 0.005 255);
+    --sf-accent: oklch(0.88 0.17 125);
+    --sf-on-accent: oklch(0.2 0.03 125);
+    --sf-ok: oklch(0.78 0.16 155);
+    --sf-ok-ink: oklch(0.8 0.14 155);
+    --sf-warn: oklch(0.82 0.15 80);
+    --sf-warn-ink: oklch(0.84 0.12 80);
+    --sf-danger: oklch(0.72 0.18 25);
+    --sf-algebra: oklch(0.72 0.14 265);
+    --sf-requisitos: oklch(0.74 0.13 160);
+    --sf-tac: oklch(0.78 0.14 60);
+    --sf-moviles: oklch(0.74 0.15 330);
+    --sf-plan-opacity: 0.6;
+    --sf-tag-mix: 100%;
+    --sf-on-tag: oklch(0.2 0.02 265);
+    --sf-display-bg: oklch(0.11 0.01 265);
+    --sf-display-ink: oklch(0.97 0.004 255);
+    --sf-display-muted: oklch(0.72 0.015 260);
+    --sf-nav-bg: oklch(0.27 0.016 265);
+    --sf-nav-line: transparent;
+    --sf-nav-ink: oklch(0.74 0.015 260);
+    --sf-nav-active: oklch(0.88 0.17 125);
+    --sf-nav-on-active: oklch(0.2 0.03 125);
+    --sf-shadow-float: 0 14px 34px -12px oklch(0 0 0 / 0.7), 0 0 0 1px oklch(1 0 0 / 0.06);
+    --sf-shadow-raised: 0 1px 2px oklch(0 0 0 / 0.4), 0 0 0 1px oklch(1 0 0 / 0.04);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --sf-bg: oklch(0.15 0.012 265);
+  --sf-surface: oklch(0.195 0.014 265);
+  --sf-surface-2: oklch(0.235 0.016 265);
+  --sf-line: oklch(0.29 0.016 265);
+  --sf-track: oklch(0.31 0.016 265);
+  --sf-muted: oklch(0.7 0.02 260);
+  --sf-ink: oklch(0.96 0.005 255);
+  --sf-accent: oklch(0.88 0.17 125);
+  --sf-on-accent: oklch(0.2 0.03 125);
+  --sf-ok: oklch(0.78 0.16 155);
+  --sf-ok-ink: oklch(0.8 0.14 155);
+  --sf-warn: oklch(0.82 0.15 80);
+  --sf-warn-ink: oklch(0.84 0.12 80);
+  --sf-danger: oklch(0.72 0.18 25);
+  --sf-algebra: oklch(0.72 0.14 265);
+  --sf-requisitos: oklch(0.74 0.13 160);
+  --sf-tac: oklch(0.78 0.14 60);
+  --sf-moviles: oklch(0.74 0.15 330);
+  --sf-plan-opacity: 0.6;
+  --sf-tag-mix: 100%;
+  --sf-on-tag: oklch(0.2 0.02 265);
+  --sf-display-bg: oklch(0.11 0.01 265);
+  --sf-display-ink: oklch(0.97 0.004 255);
+  --sf-display-muted: oklch(0.72 0.015 260);
+  --sf-nav-bg: oklch(0.27 0.016 265);
+  --sf-nav-line: transparent;
+  --sf-nav-ink: oklch(0.74 0.015 260);
+  --sf-nav-active: oklch(0.88 0.17 125);
+  --sf-nav-on-active: oklch(0.2 0.03 125);
+  --sf-shadow-float: 0 14px 34px -12px oklch(0 0 0 / 0.7), 0 0 0 1px oklch(1 0 0 / 0.06);
+  --sf-shadow-raised: 0 1px 2px oklch(0 0 0 / 0.4), 0 0 0 1px oklch(1 0 0 / 0.04);
+}

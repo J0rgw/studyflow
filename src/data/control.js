@@ -44,9 +44,14 @@ export function restriccionesDia(iso) {
   };
 }
 
+/** Examenes aun no terminados respecto a fecha y hora de Madrid, en orden. */
+export function examenesPendientes(fecha, hora) {
+  return EXAMENES.filter((e) => e.fecha > fecha || (e.fecha === fecha && e.fin > hora));
+}
+
 /** Primer examen aun no terminado respecto a fecha y hora de Madrid. */
 export function proximoExamen(fecha, hora) {
-  return EXAMENES.find((e) => e.fecha > fecha || (e.fecha === fecha && e.fin > hora)) ?? null;
+  return examenesPendientes(fecha, hora)[0] ?? null;
 }
 
 // Reparto diario verificado en CONTEXT.md (minutos por materia). Solo sirve para

@@ -21,3 +21,6 @@ Construir la web personal StudyFlow con calendario, Hoy, Pomodoro, progreso y re
 
 ## Proceso
 Una fase por prompt. Ejecutar tests/build, documentar cambios y limitaciones. Historial de Git legible en castellano; NO hacer commits sin autorización. No modificar los planes originales.
+
+## Diseño
+Antes de cualquier cambio de UI, CSS, animación o texto de interfaz: leer `docs/design.md` y abrir las referencias de su sección 1 (Designspells, Dribbble, Collect UI). Usar solo los tokens `--sf-*`, mínimo texto explicativo, smooth scroll y respetar `prefers-reduced-motion`. Si se añade o cambia una referencia, actualizar `docs/design.md`.

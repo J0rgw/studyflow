@@ -20,9 +20,17 @@ describe('sin credenciales en el repositorio', () => {
     const src = archivos(new URL('../src', import.meta.url).pathname).filter((f) => f.endsWith('.js'));
     for (const f of src) {
       const txt = readFileSync(f, 'utf8');
-      expect(txt, f).not.toMatch(/localStorage|sessionStorage/);
+      // Unica excepcion: preferencia de tema (clave fija 'sf-theme', ver siguiente test).
+      if (!f.endsWith('src/lib/theme.js')) expect(txt, f).not.toMatch(/localStorage|sessionStorage/);
       expect(txt, f).not.toMatch(/innerHTML/);
       expect(txt, f).not.toMatch(/console\.\w+\([^)]*password/i);
     }
+  });
+  it('el almacenamiento local solo guarda la preferencia de tema', () => {
+    const txt = readFileSync(new URL('../src/lib/theme.js', import.meta.url), 'utf8');
+    const usos = [...txt.matchAll(/localStorage\.(\w+)\(([^)]*)\)/g)];
+    expect(usos.length).toBeGreaterThan(0);
+    for (const [, , args] of usos) expect(args).toMatch(/^CLAVE/);
+    expect(txt).toContain("const CLAVE = 'sf-theme'");
   });
 });
