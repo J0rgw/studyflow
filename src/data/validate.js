@@ -2,7 +2,7 @@
 // Devuelve discrepancias; los errores bloquean la importacion, los avisos solo informan.
 import { SCHEMA_VERSION } from './schema.js';
 import {
-  MATERIAS, EXAMENES, PERIODO, TOTAL_HORAS_PREVISTAS, REFERENCIAS_DIA, restriccionesDia, materiaPorId,
+  MATERIAS, EXAMENES, PERIODO, TOTAL_HORAS_PREVISTAS, REFERENCIAS_DIA, restriccionesDia, materiaPorId, cupoDia,
 } from './control.js';
 import { toISO } from '../lib/dates.js';
 
@@ -22,12 +22,6 @@ export function esFechaISO(v) {
 }
 
 function esObjeto(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
-
-/** Limite diario: errores para bloqueos y limites explicitos; aviso para el resto. */
-function dia(iso) {
-  const d = new Date(`${iso}T00:00:00Z`).getUTCDay();
-  return d === 0 || d === 6;
-}
 
 export function validarPlan(plan) {
   const items = [];
@@ -107,7 +101,7 @@ export function validarPlan(plan) {
     const r = restriccionesDia(fecha);
     if (r.bloqueado) error('BLOQUEADO', `${fecha} es un día bloqueado (0 h) pero tiene ${d.total} min.`, fecha);
     else if (r.maxMin != null && d.total > r.maxMin) error('LIMITE', `${fecha}: ${d.total} min superan el máximo de ${r.maxMin} min.`, fecha);
-    else if (r.maxMin == null && d.total > (dia(fecha) ? 360 : 300)) aviso('CARGA', `${fecha}: ${d.total} min superan la carga habitual (${dia(fecha) ? '6' : '5'} h).`, fecha);
+    else if (r.maxMin == null && d.total > cupoDia(fecha).minutos) aviso('CARGA', `${fecha}: ${d.total} min superan la carga habitual (${cupoDia(fecha).minutos / 60} h).`, fecha);
     if (r.examenes.length > 0) aviso('DIA_EXAMEN', `${fecha} tiene examen y sesiones de estudio: comprueba que son repaso previo.`, fecha);
   }
 

@@ -1,13 +1,169 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Datos privados: solo el UID propietario concreto, en cualquier subcoleccion.
-    // El UID de abajo es el de la unica cuenta propietaria. Verificado con el emulador:
-    // npm run test:rules
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null
+    // Solo el UID propietario concreto. El UID de abajo es el de la unica cuenta propietaria.
+    // Verificado con el emulador: npm run test:rules
+    function propietario(userId) {
+      return request.auth != null
         && request.auth.uid == userId
         && request.auth.uid == 'oGQgZ33jxNedwDHKnEcuO6qAqK43';
+    }
+
+    function camposExactos(d, campos) {
+      return d.keys().hasOnly(campos) && d.keys().hasAll(campos);
+    }
+
+    function esFecha(f) {
+      return f is string && f.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    // Dia del periodo de estudio (14/10 a 08/11/2026). Las cadenas ISO se comparan como fechas.
+    function fechaPeriodo(f) {
+      return esFecha(f) && f >= '2026-10-14' && f <= '2026-11-08';
+    }
+
+    // Dia del periodo en que se puede estudiar: los bloqueados (0 h) nunca reciben una sesion.
+    function fechaEstudio(f) {
+      return fechaPeriodo(f) && !(f in ['2026-10-20', '2026-10-21', '2026-10-22']);
+    }
+
+    function idSesion(id) {
+      return id is string && id.matches('^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$');
+    }
+
+    // Registro de un intervalo de foco (de una sesion o libre): campos fijos, tiempo activo entre
+    // 1 min y 4 h que no supera el lapso real entre inicio y fin, id = ejecucion-intervalo y fecha
+    // del servidor.
+    function registroValido(logId) {
+      let d = request.resource.data;
+      let campos = ['schemaVersion', 'ejecucionId', 'intervalo', 'sesionId', 'materiaId', 'fecha',
+                    'inicio', 'fin', 'focoMs', 'tipo', 'creadoEn'];
+      return d.keys().hasOnly(campos) && d.keys().hasAll(campos)
+        && d.schemaVersion == 1
+        && d.ejecucionId is string && d.ejecucionId.matches('^[A-Za-z0-9]{8,40}$')
+        && d.intervalo is int && d.intervalo >= 1
+        && logId == d.ejecucionId + '-' + string(d.intervalo)
+        // Foco libre: sin sesion (null) y con materia opcional (null).
+        && (d.sesionId == null || (d.sesionId is string && d.sesionId.size() > 0 && d.sesionId.size() <= 64))
+        && (d.materiaId == null || d.materiaId in ['algebra', 'requisitos', 'tac', 'moviles'])
+        && d.fecha is string && d.fecha.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.inicio is int && d.fin is int && d.focoMs is int
+        && d.focoMs >= 60000 && d.focoMs <= 14400000
+        && d.fin - d.inicio >= d.focoMs
+        && d.tipo in ['completo', 'parcial']
+        && d.creadoEn == request.time;
+    }
+
+    // Fecha vigente de una sesion movida a mano. Cada cambio sube rev en 1 y SOLO es valido si en
+    // la misma escritura existe su evento de auditoria events/{sesionId-rev}.
+    function movimientoValido(userId, sesionId) {
+      let d = request.resource.data;
+      let previa = resource == null ? 0 : resource.data.rev;
+      return camposExactos(d, ['schemaVersion', 'sesionId', 'fechaPlan', 'fecha', 'rev', 'actualizadoEn'])
+        && d.schemaVersion == 1
+        && d.sesionId == sesionId
+        && fechaPeriodo(d.fechaPlan) && fechaEstudio(d.fecha)
+        && d.rev is int && d.rev == previa + 1
+        && d.actualizadoEn == request.time
+        && existsAfter(/databases/$(database)/documents/users/$(userId)/events/$(sesionId + '-' + string(d.rev)));
+    }
+
+    // Evento de auditoria de una reprogramacion: describe exactamente el cambio que se escribe a
+    // la vez en reschedules (misma rev, `desde` = fecha anterior, `hasta` = fecha nueva).
+    function eventoValido(userId, eventId) {
+      let d = request.resource.data;
+      let ruta = /databases/$(database)/documents/users/$(userId)/reschedules/$(d.sesionId);
+      return camposExactos(d, ['schemaVersion', 'tipo', 'sesionId', 'rev', 'desde', 'hasta', 'fechaPlan',
+                               'minutos', 'motivo', 'avisos', 'creadoEn'])
+        && d.schemaVersion == 1
+        && d.tipo == 'reprogramacion'
+        && idSesion(d.sesionId)
+        && d.rev is int && d.rev >= 1
+        && eventId == d.sesionId + '-' + string(d.rev)
+        && fechaPeriodo(d.desde) && fechaEstudio(d.hasta) && d.desde != d.hasta
+        && fechaPeriodo(d.fechaPlan)
+        && d.minutos is int && d.minutos >= 1 && d.minutos <= 480
+        && d.motivo is string && d.motivo.size() <= 200
+        && d.avisos is list && d.avisos.size() <= 4
+        && d.creadoEn == request.time
+        && ((d.rev == 1 && d.desde == d.fechaPlan)
+            || (d.rev > 1 && get(ruta).data.rev == d.rev - 1 && get(ruta).data.fecha == d.desde))
+        && getAfter(ruta).data.rev == d.rev
+        && getAfter(ruta).data.fecha == d.hasta;
+    }
+
+    // Duda o error de una materia. Materia, sesion, fecha y alta no cambian despues de crearla
+    // (repetir el alta con el mismo id solo renueva la marca de tiempo).
+    function dudaValida() {
+      let d = request.resource.data;
+      return camposExactos(d, ['schemaVersion', 'materiaId', 'sesionId', 'texto', 'estado', 'fecha',
+                               'creadoEn', 'actualizadoEn'])
+        && d.schemaVersion == 1
+        && d.materiaId in ['algebra', 'requisitos', 'tac', 'moviles']
+        && (d.sesionId == null || idSesion(d.sesionId))
+        && d.texto is string && d.texto.size() > 0 && d.texto.size() <= 300
+        && d.estado in ['pendiente', 'en-repaso', 'resuelta']
+        && esFecha(d.fecha)
+        && d.creadoEn is timestamp
+        && d.actualizadoEn == request.time;
+    }
+
+    function dudaSinCambiosFijos() {
+      let d = request.resource.data;
+      let antes = resource.data;
+      return d.materiaId == antes.materiaId && d.sesionId == antes.sesionId && d.fecha == antes.fecha
+        && (d.creadoEn == antes.creadoEn || d.creadoEn == request.time);
+    }
+
+    // Cierre del dia: un documento por fecha del periodo.
+    function cierreValido(fecha) {
+      let d = request.resource.data;
+      return camposExactos(d, ['schemaVersion', 'fecha', 'dificultades', 'pendiente', 'cerradoEn'])
+        && d.schemaVersion == 1
+        && d.fecha == fecha && fechaPeriodo(fecha)
+        && d.dificultades is string && d.dificultades.size() <= 2000
+        && d.pendiente is string && d.pendiente.size() <= 2000
+        && d.cerradoEn == request.time;
+    }
+
+    match /users/{userId} {
+      // Registros de foco: se crean una vez y nunca se modifican ni se borran (ni por error de
+      // la app ni por una reimportacion). Repetir la creacion del mismo id es una actualizacion
+      // y se rechaza: no hay duplicados.
+      match /logs/{logId} {
+        allow read: if propietario(userId);
+        allow create: if propietario(userId) && registroValido(logId);
+      }
+
+      // Auditoria de reprogramaciones: igual que los registros, solo se crean.
+      match /events/{eventId} {
+        allow read: if propietario(userId);
+        allow create: if propietario(userId) && eventoValido(userId, eventId);
+      }
+
+      // Fecha vigente de las sesiones movidas: nunca se borra (devolverla a su fecha es otro cambio
+      // auditado). Las sesiones del plan importado no se tocan.
+      match /reschedules/{sesionId} {
+        allow read: if propietario(userId);
+        allow create, update: if propietario(userId) && movimientoValido(userId, sesionId);
+      }
+
+      match /reviews/{reviewId} {
+        allow read, delete: if propietario(userId);
+        allow create: if propietario(userId) && dudaValida() && request.resource.data.creadoEn == request.time;
+        allow update: if propietario(userId) && dudaValida() && dudaSinCambiosFijos();
+      }
+
+      match /closings/{fecha} {
+        allow read: if propietario(userId);
+        allow create, update: if propietario(userId) && cierreValido(fecha);
+      }
+
+      // Resto de datos privados (plan, sesiones, progreso, foco activo, ajustes...).
+      match /{coleccion}/{document=**} {
+        allow read, write: if propietario(userId)
+          && !(coleccion in ['logs', 'events', 'reschedules', 'reviews', 'closings']);
+      }
     }
 
     // Denegar todo lo demas de forma explicita (sin sesion o UID ajeno).

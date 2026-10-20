@@ -22,6 +22,24 @@ export { default as Close } from 'reicon/icons/X';
 export { default as Check } from 'reicon/icons/Check';
 export { default as List } from 'reicon/icons/List';
 export { default as Trash } from 'reicon/icons/Trash';
+// Modo foco (fase 3)
+export { default as Play } from 'reicon/icons/Play';
+export { default as Pause } from 'reicon/icons/Pause';
+export { default as Stop } from 'reicon/icons/Stop';
+export { default as SkipNext } from 'reicon/icons/SkipNext';
+export { default as Stopwatch } from 'reicon/icons/Stopwatch';
+export { default as ArrowLeft } from 'reicon/icons/ArrowLeft';
+export { default as Refresh } from 'reicon/icons/Redo';
+export { default as HalfCheck } from 'reicon/icons/CircleHalfDottedCheck';
+export { default as TimeFwd } from 'reicon/icons/TimeFwd';
+// Progreso, reprogramacion, dudas y cierre (fase 4)
+export { default as ChartBar } from 'reicon/icons/ChartBar';
+export { default as CalendarEdit } from 'reicon/icons/CalendarEdit';
+export { default as CalendarCheck } from 'reicon/icons/CalendarCheck';
+export { default as MessageQuestion } from 'reicon/icons/MessageQuestion';
+export { default as Plus } from 'reicon/icons/Plus';
+export { default as Undo } from 'reicon/icons/Undo';
+export { default as AlertTriangle } from 'reicon/icons/AlertTriangle';
 
 // Identificadores de las etiquetas: uno por materia y uno por estado.
 // «Math» se renombra para no tapar el objeto global Math en quien lo importe.

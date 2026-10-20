@@ -1,5 +1,5 @@
 // Vista Hoy: tira de dias, resumen del dia, sesiones, cuenta atras al examen y corona del plan.
-import { Target } from '../lib/icons.js';
+import { Target, Play, Stopwatch } from '../lib/icons.js';
 import { h, icono } from '../lib/dom.js';
 import {
   formatoMinutos, formatoMedio, formatoCorto, diasEntre, diaSemana, rangoFechas, parseISO,
@@ -11,8 +11,13 @@ import {
 } from '../data/control.js';
 import {
   barraMarcas, anilloDia, anillosPlan, vacio, esqueleto, aviso, descripcionDia,
-  etiqueta, grupoEtiquetas, etiquetaPrueba, etiquetaExamen, etiquetasEstado,
+  etiqueta, grupoEtiquetas, etiquetaPrueba, etiquetaExamen, etiquetasEstado, marcaEstado,
 } from './ui.js';
+import {
+  estadoEfectivo, trabajadoDelDia, minutos, NOMBRE_ESTADO, RESULTADOS, NOMBRE_RESULTADO,
+} from '../data/progreso.js';
+import { trabajadoPorMateria } from '../data/estadisticas.js';
+import { tarjetaCierreHoy } from './cierre.js';
 
 const LETRAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const capitalizar = (t) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -79,11 +84,14 @@ function cifraMinutos(min) {
   ];
 }
 
-function resumenDia(fecha, datos) {
+function resumenDia(fecha, datos, progreso) {
   const r = restriccionesDia(fecha);
   const delDia = sesionesDelDia(datos.sesiones, fecha);
   const min = minutosDelDia(datos.sesiones, fecha);
   const listo = datos.status === 'ready';
+  // Trabajado = solo registros confirmados por Firestore de las sesiones de ese dia.
+  const trabajado = progreso.registrosListos ? trabajadoDelDia(datos.sesiones, progreso.porSesion, fecha) : [];
+  const minTrabajados = trabajado.reduce((t, x) => t + x.minutos, 0);
   return h('section', { class: 'sf-card sf-sum', 'aria-labelledby': 'h-previsto' },
     h('div', { class: 'sf-card__head' },
       h('h2', { id: 'h-previsto', class: 'sf-label' }, 'Previsto'),
@@ -98,22 +106,46 @@ function resumenDia(fecha, datos) {
       cargando(datos) ? 'Cargando…'
         : !listo ? 'Sin datos'
           : datos.sesiones.length === 0 ? 'Sin plan importado'
-            : `${delDia.length} ${delDia.length === 1 ? 'sesión' : 'sesiones'}`),
-    listo && min > 0 && barraMarcas(minutosPorMateria(datos.sesiones, fecha), Math.max(min, r.maxMin ?? 0)));
+            : `${delDia.length} ${delDia.length === 1 ? 'sesión' : 'sesiones'}`,
+      minTrabajados > 0 && h('span', { class: 'sf-sum__work' }, ` · ${formatoMinutos(minTrabajados)} trabajados`)),
+    listo && min > 0 && barraMarcas(minutosPorMateria(datos.sesiones, fecha), Math.max(min, r.maxMin ?? 0), { trabajado }));
 }
 
-export function filaSesion(s) {
+/**
+ * Fila de sesion (referencia Todo list 2): marca de estado, titulo que abre el detalle, minutos
+ * trabajados/previstos y boton para empezar el foco. Trabajado = solo registros confirmados.
+ */
+export function filaSesion(s, { progreso, foco, onEmpezar }) {
   const m = materiaPorId(s.materiaId);
-  return h('li', { class: 'sf-row', style: `--m: var(--sf-${s.materiaId})` },
-    h('span', { class: 'sf-row__mark', 'aria-hidden': 'true' }),
-    h('div', { class: 'sf-row__body' },
-      h('p', { class: 'sf-row__title' }, s.titulo, s.prueba && etiquetaPrueba()),
-      h('p', { class: 'sf-row__meta' }, m ? m.corto : s.materiaId, s.tema && ` · ${s.tema}`),
+  const trabajadoMs = progreso.porSesion.get(s.id) ?? 0;
+  const ej = foco?.ejecucion;
+  const aqui = ej?.sesionId === s.id;
+  const estado = estadoEfectivo({ manual: progreso.mapa.get(s.id)?.estado, trabajadoMs, enCurso: aqui });
+  const resultado = progreso.mapa.get(s.id)?.resultado;
+  const trabajado = minutos(trabajadoMs);
+  // Otro foco en marcha (no en descanso): no se puede empezar otro hasta terminarlo.
+  const ocupado = Boolean(ej && !aqui && ej.fase === 'foco');
+  return h('li', { class: `sf-row is-${estado}`, style: `--m: var(--sf-${s.materiaId})` },
+    marcaEstado(estado, trabajadoMs / (s.minutos * 60_000)),
+    h('a', { class: 'sf-row__body', href: `#/sesion/${s.id}` },
+      h('p', { class: 'sf-row__title' }, h('span', { class: 'sf-row__name' }, s.titulo), s.prueba && etiquetaPrueba(),
+        h('span', { class: 'sf-sr' }, `, ${NOMBRE_ESTADO[estado]}`)),
+      h('p', { class: 'sf-row__meta' }, m ? m.corto : s.materiaId, s.tema && ` · ${s.tema}`,
+        s.movida && h('span', { class: 'sf-row__moved' }, ` · desde ${formatoCorto(s.fechaPlan)}`),
+        RESULTADOS.includes(resultado) && h('span', { class: `sf-row__res is-${resultado}` }, ` · ${NOMBRE_RESULTADO[resultado]}`)),
       s.objetivo && h('p', { class: 'sf-row__goal' }, icono(Target, { size: 14 }), h('span', {}, s.objetivo))),
-    h('span', { class: 'sf-row__min' }, formatoMinutos(s.minutos)));
+    h('div', { class: 'sf-row__side' },
+      h('span', { class: 'sf-row__min' }, trabajado > 0 ? `${trabajado}/${s.minutos} min` : formatoMinutos(s.minutos),
+        trabajado > 0 && h('span', { class: 'sf-sr' }, ' trabajados de los previstos')),
+      onEmpezar && (aqui
+        ? h('a', { id: `play-${s.id}`, class: 'sf-play is-live', href: '#/foco', 'aria-label': `Ver foco: ${s.titulo}` }, icono(Stopwatch, { size: 16 }))
+        : h('button', {
+          id: `play-${s.id}`, type: 'button', class: 'sf-play', 'aria-label': `Empezar foco: ${s.titulo}`,
+          disabled: ocupado || !foco?.listo, title: ocupado ? 'Hay otro foco en marcha' : null, onClick: () => onEmpezar(s),
+        }, icono(Play, { size: 14, weight: 'Filled' })))));
 }
 
-function listaSesiones(fecha, datos) {
+function listaSesiones(fecha, datos, ctx) {
   const delDia = datos.status === 'ready' ? sesionesDelDia(datos.sesiones, fecha) : [];
   let cuerpo;
   if (cargando(datos)) cuerpo = esqueleto(3);
@@ -121,7 +153,7 @@ function listaSesiones(fecha, datos) {
   else if (datos.sesiones.length === 0) {
     cuerpo = vacio('Sin plan importado', h('a', { class: 'button button--secondary button--sm', href: '#/datos' }, 'Importar plan'));
   } else if (delDia.length === 0) cuerpo = vacio(restriccionesDia(fecha).bloqueado ? 'Día bloqueado' : 'Sin sesiones');
-  else cuerpo = h('ul', { class: 'sf-rows' }, delDia.map(filaSesion));
+  else cuerpo = h('ul', { class: 'sf-rows' }, delDia.map((s) => filaSesion(s, ctx)));
   return h('section', { class: 'sf-card sf-list', 'aria-labelledby': 'h-sesiones', 'aria-busy': cargando(datos) ? 'true' : null },
     h('div', { class: 'sf-card__head' },
       h('h2', { id: 'h-sesiones', class: 'sf-label' }, 'Sesiones'),
@@ -223,36 +255,51 @@ function examenes(ahora, fecha) {
       h('span', { class: 'sf-exams__left' }, faltan(e, fecha, ahora))))));
 }
 
-// Plan hasta hoy (referencia Dashboard): anillos por materia y leyenda «hasta hoy / total».
+// Plan hasta hoy (referencia Dashboard «Arc»): un anillo por materia con lo trabajado solido, lo
+// previsto hasta hoy tenue y el resto del plan en gris; la marca de tinta es hoy. La leyenda dice
+// «trabajado / previsto hasta hoy» y el total de la materia. Trabajado = solo foco confirmado.
 // Sin plan importado solo se muestran las horas de control (36/25/23/20).
-function plan(datos, hoy) {
+function plan(datos, hoy, progreso) {
   const listo = datos.status === 'ready' && datos.sesiones.length > 0;
-  const filas = listo
+  const conTiempo = listo && progreso.registrosListos;
+  const porMateria = conTiempo ? trabajadoPorMateria(progreso.registros) : new Map();
+  const filas = (listo
     ? previstoHastaHoy(datos.sesiones, hoy)
-    : MATERIAS.map((m) => ({ materiaId: m.id, total: m.horas * 60, hasta: 0 }));
+    : MATERIAS.map((m) => ({ materiaId: m.id, total: m.horas * 60, hasta: 0 })))
+    .map((f) => ({ ...f, trabajado: minutos(porMateria.get(f.materiaId) ?? 0) }));
   const total = filas.reduce((t, f) => t + f.total, 0);
   const hasta = filas.reduce((t, f) => t + f.hasta, 0);
+  const trabajado = filas.reduce((t, f) => t + f.trabajado, 0);
   return h('section', { class: 'sf-card sf-plan', 'aria-labelledby': 'h-plan' },
     h('div', { class: 'sf-card__head' },
       h('h2', { id: 'h-plan', class: 'sf-label' }, listo ? 'Plan hasta hoy' : 'Plan'),
-      listo && h('span', { class: 'sf-caption' }, 'previsto, no trabajado')),
+      listo && h('a', { class: 'sf-caption sf-plan__more', href: '#/progreso' }, 'trabajado / previsto')),
     h('div', { class: 'sf-plan__body' },
       h('div', { class: 'sf-plan__chart' },
-        anillosPlan(filas.map((f) => ({ materiaId: f.materiaId, fraccion: f.total ? f.hasta / f.total : 0 })), { hoy: listo }),
+        anillosPlan(filas.map((f) => ({
+          materiaId: f.materiaId, fraccion: f.total ? f.hasta / f.total : 0, trabajo: f.total ? f.trabajado / f.total : 0,
+        })), { hoy: listo }),
         h('p', { class: 'sf-plan__total' },
-          h('span', { class: 'sf-num' }, listo ? horasDecimal(hasta) : TOTAL_HORAS_PREVISTAS), h('span', { class: 'sf-unit' }, 'h'),
-          h('span', { class: 'sf-plan__cap' }, listo ? `de ${horasDecimal(total)} h` : 'previstas'))),
+          listo
+            ? [h('span', { class: 'sf-num' }, trabajado > 0 ? horasDecimal(trabajado) : '—'), trabajado > 0 && h('span', { class: 'sf-unit' }, 'h')]
+            : [h('span', { class: 'sf-num' }, TOTAL_HORAS_PREVISTAS), h('span', { class: 'sf-unit' }, 'h')],
+          h('span', { class: 'sf-plan__cap' }, listo ? `de ${horasDecimal(hasta)} h previstas` : 'previstas'))),
       h('ul', { class: 'sf-legend-list' }, filas.map((f) => h('li', { style: `--m: var(--sf-${f.materiaId})` },
         h('span', { class: 'sf-legend-list__bar', 'aria-hidden': 'true' }),
         h('span', { class: 'sf-legend-list__text' },
           h('span', { class: 'sf-legend-list__name' }, materiaPorId(f.materiaId).corto),
-          h('span', { class: 'sf-legend-list__sub' }, listo ? `${horasDecimal(f.hasta)} / ${horasDecimal(f.total)} h` : 'previstas')),
-        h('span', { class: 'sf-legend-list__value' },
-          listo ? `${f.total ? Math.round((f.hasta / f.total) * 100) : 0} %` : `${horasDecimal(f.total)} h`))))));
+          h('span', { class: 'sf-legend-list__sub' }, listo
+            ? [`${f.trabajado > 0 ? horasDecimal(f.trabajado) : '—'} / ${horasDecimal(f.hasta)} h`,
+              h('span', { class: 'sf-sr' }, ' trabajadas de las previstas hasta hoy')]
+            : 'previstas')),
+        h('span', { class: 'sf-legend-list__value' }, `${horasDecimal(f.total)} h`))))));
 }
 
-export function vistaHoy({ ahora, datos, seleccionado, onSelect }) {
+export function vistaHoy({
+  ahora, datos, seleccionado, onSelect, progreso, foco, onEmpezar, aviso: avisoFoco = null, cierres = new Map(),
+}) {
   const fecha = seleccionado;
+  const ctx = { progreso, foco, onEmpezar };
   return h('div', { class: 'sf-page' },
     h('header', { class: 'sf-head' },
       h('div', {},
@@ -262,6 +309,8 @@ export function vistaHoy({ ahora, datos, seleccionado, onSelect }) {
     tira({ seleccionado: fecha, hoy: ahora.fecha, sesiones: datos.sesiones, onSelect }),
     // Dos columnas en escritorio; en movil se apilan en este mismo orden.
     h('div', { class: 'sf-hoy' },
-      h('div', { class: 'sf-col' }, resumenDia(fecha, datos), listaSesiones(fecha, datos)),
-      h('div', { class: 'sf-col' }, examenes(ahora, fecha), plan(datos, ahora.fecha))));
+      h('div', { class: 'sf-col' }, resumenDia(fecha, datos, progreso), avisoFoco && aviso('No se pudo empezar', avisoFoco, 'warning'),
+        listaSesiones(fecha, datos, ctx),
+        tarjetaCierreHoy({ fecha, hoy: ahora.fecha, datos, progreso, cierres })),
+      h('div', { class: 'sf-col' }, examenes(ahora, fecha), plan(datos, ahora.fecha, progreso))));
 }

@@ -6,7 +6,7 @@ import {
   cuadriculaMes, nombreMes, formatoMedio, formatoCorto, formatoMinutos, sumarMeses, rangoFechas, diasEntre,
 } from '../lib/dates.js';
 import {
-  MATERIAS, PERIODO, restriccionesDia, materiaPorId, examenesPendientes,
+  MATERIAS, PERIODO, restriccionesDia, materiaPorId, examenesPendientes, cupoDia,
 } from '../data/control.js';
 import { sesionesDelDia, minutosDelDia, minutosPorMateria } from '../data/sesiones.js';
 import {
@@ -59,10 +59,10 @@ function celda(dia, { seleccionado, hoy, sesiones, filtro }, onSelect) {
 }
 
 // Evento de la lista: barra lateral + etiqueta del color de la materia + titulo (referencia).
-function evento({ materiaId, marca, titulo, meta, prueba, examen }) {
+function evento({ materiaId, marca, titulo, meta, prueba, examen, href = null }) {
   return h('li', { class: `sf-event${examen ? ' is-exam' : ''}`, style: `--m: var(--sf-${materiaId})` },
     h('div', { class: 'sf-event__label' }, marca),
-    h('p', { class: 'sf-event__title' }, titulo, prueba && etiquetaPrueba()),
+    h('p', { class: 'sf-event__title' }, href ? h('a', { class: 'sf-event__link', href }, titulo) : titulo, prueba && etiquetaPrueba()),
     meta && h('p', { class: 'sf-event__meta' }, meta));
 }
 
@@ -75,7 +75,7 @@ function eventosDia(iso, sesiones, filtro) {
     ...sesionesDelDia(sesiones, iso).map((s) => evento({
       materiaId: s.materiaId,
       marca: etiqueta(`${materiaPorId(s.materiaId)?.corto ?? s.materiaId} · ${formatoMinutos(s.minutos)}`, { materia: s.materiaId }),
-      titulo: s.titulo, meta: s.tema, prueba: s.prueba,
+      titulo: s.titulo, meta: s.movida ? `${s.tema} · desde ${formatoCorto(s.fechaPlan)}` : s.tema, prueba: s.prueba, href: `#/sesion/${s.id}`,
     })),
   ];
 }
@@ -103,12 +103,15 @@ function panelDia(iso, datos, sesiones, filtro) {
   const r = restriccionesDia(iso);
   const eventos = datos.status === 'ready' ? eventosDia(iso, sesiones, filtro) : [];
   const total = minutosDelDia(sesiones, iso);
+  const cupo = cupoDia(iso);
   const cuerpo = estadoDatos(datos)
     ?? (eventos.length > 0 ? h('ul', { class: 'sf-events' }, eventos) : vacio(r.bloqueado ? 'Día bloqueado' : 'Sin sesiones'));
   return h('section', { class: 'sf-card sf-daypanel', 'aria-labelledby': 'cal-dia', 'aria-live': 'polite' },
     h('div', { class: 'sf-card__head' },
       h('h2', { id: 'cal-dia', class: 'sf-daypanel__title' }, capitalizar(formatoMedio(iso))),
-      total > 0 && h('span', { class: 'sf-daypanel__total' }, formatoMinutos(total))),
+      // Carga del dia frente a su cupo (maximo o carga habitual): ayuda al reprogramar.
+      total > 0 && h('span', { class: `sf-daypanel__total${cupo.minutos > 0 && total > cupo.minutos ? ' is-over' : ''}` },
+        formatoMinutos(total), cupo.minutos > 0 && h('span', { class: 'sf-daypanel__cap' }, ` / ${formatoMinutos(cupo.minutos)}`))),
     grupoEtiquetas(etiquetasEstado(r), 'Estado del día'),
     cuerpo,
     faltanExamenes(iso, filtro));

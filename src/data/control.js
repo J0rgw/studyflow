@@ -44,6 +44,27 @@ export function restriccionesDia(iso) {
   };
 }
 
+// Carga habitual sin limite explicito: 5 h efectivas entre semana y 6 h en fin de semana.
+export const CARGA_HABITUAL = Object.freeze({ laborable: 300, finde: 360 });
+
+/**
+ * Cupo de minutos de estudio de un dia: 0 fuera del periodo o bloqueado; el maximo explicito
+ * (27/10, 03/11, 06/11) es un limite duro; el resto de dias, la carga habitual (orientativa).
+ */
+export function cupoDia(iso) {
+  const r = restriccionesDia(iso);
+  if (!r.enPeriodo) return { minutos: 0, tipo: 'fuera' };
+  if (r.bloqueado) return { minutos: 0, tipo: 'bloqueado' };
+  if (r.maxMin != null) return { minutos: r.maxMin, tipo: 'limite' };
+  const d = new Date(`${iso}T00:00:00Z`).getUTCDay();
+  return { minutos: d === 0 || d === 6 ? CARGA_HABITUAL.finde : CARGA_HABITUAL.laborable, tipo: 'habitual' };
+}
+
+/** Examen de una materia (null si no tiene). */
+export function examenDe(materiaId) {
+  return EXAMENES.find((e) => e.materiaId === materiaId) ?? null;
+}
+
 /** Examenes aun no terminados respecto a fecha y hora de Madrid, en orden. */
 export function examenesPendientes(fecha, hora) {
   return EXAMENES.filter((e) => e.fecha > fecha || (e.fecha === fecha && e.fin > hora));

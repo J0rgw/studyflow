@@ -19,7 +19,7 @@ function hoja(s, hoy, i) {
   return h('li', { class: `sf-leaf${s.fecha === hoy ? ' is-today' : ''}${s.fecha < hoy ? ' is-past' : ''}`, style: `--i: ${i}` },
     h('span', { class: 'sf-leaf__dot', 'aria-hidden': 'true' }),
     h('span', { class: 'sf-leaf__date' }, formatoCorto(s.fecha)),
-    h('span', { class: 'sf-leaf__title' }, s.titulo, s.prueba && etiquetaPrueba()),
+    h('span', { class: 'sf-leaf__title' }, h('a', { class: 'sf-leaf__link', href: `#/sesion/${s.id}` }, s.titulo), s.prueba && etiquetaPrueba()),
     h('span', { class: 'sf-leaf__min' }, formatoMinutos(s.minutos)));
 }
 
